@@ -1,0 +1,44 @@
+---
+title: "Why CDF?"
+author: "Patrick Altmeyer"
+date: "`r format(Sys.Date(), '%d %B, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Why the CDF?
+
+The authors have the following to say about this:
+
+*We used the cumulative distribution because it highlights a change in the distribution, which is our key interest, and it does not require any user-defined tuning parameters. Histograms require the selection of a binwidth and density plots require user- defined smoothing parameters, which are subjective and will create different impressions depending on the choice made.*
+
+I take their points, it is often easier to interpret CDFs (especially the y-axis). **But I still don't think the choice between showing the PDF vs. the CDF is obvious. Using the CDF the authors' point is illustrated through a kink around 1, while the point could have equally been made through showing the PDF and pointing to its mode (which some may find more appealing).**
+
+Some audiences may find it easier to digest the former as perhaps it is more visually appealing: the sudden steepening of the CDF illustrates the sudden, unnatural increase of values slightly higher than one quite nicely. Other audiences may look at the PDF and immediately grasp what is going on: the PDF suddenly spikes (and peaks) at a value slightly higher than one, which looks suspicious.^[Note that I am referring to the lower CI bound here, but the logic is of course very similar for the upper bound.] In the Figure below I illustrate my thinking through some simulated data. The solid curves correspond to the 
+
+```{r}
+a = runif(1000) # values between 0,1
+b = rep(runif(200,1,1.1),5) # cluster of values between 1,1.05
+c = runif(1000,1,2) # values between 1,2
+X_lower = c(a,b,c)
+a = runif(1000) # values between 0,1
+b = rep(runif(200,0.9,1),5) # cluster of values between 1,1.05
+c = runif(1000,1,2) # values between 1,2
+X_upper = c(a,b,c)
+# Plots
+dens_lower = density(X_lower)
+dens_upper = density(X_upper)
+par(mfrow=c(1,2))
+plot(dens_lower, main = NA, xlab="X") # density
+lines(dens_upper, lty=2)
+abline(v=1, col="red")
+ecdf_lower = cumsum(dens_lower$y/sum(dens_lower$y)) # empirical cdf
+ecdf_upper = cumsum(dens_upper$y/sum(dens_upper$y)) # empirical cdf
+plot(x=dens_lower$x, y=ecdf_lower, t="l", xlab = "X", ylab="Empirical CDF")
+lines(x=dens_upper$x,ecdf_upper, lty=2)
+abline(v=1, col="red")
+```
+
