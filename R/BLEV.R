@@ -30,7 +30,8 @@ BLEV <- function(Phi, y, m, weighted=F, rand_state=NULL, plot_wgts=F, prob_only=
     return(
       list(
         fitted = y_hat,
-        coeff = beta_hat
+        coeff = beta_hat,
+        prob = prob
       )
     )
   }

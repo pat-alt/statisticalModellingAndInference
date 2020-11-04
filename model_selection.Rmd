@@ -327,6 +327,63 @@ This still has computational costs of order $\mathcal{O}(np^2)$. But now it beco
 
 PL subsampling is associated with computational costs of order $\mathcal{O}(np)$ so a great improvement in particular when both $n$ and $p$ are large. 
 
+### Comparison of methods
+
+```{r}
+n <- 1000
+p <- 100
+```
+
+
+As discussed in @zhu2015optimal both OPT and PL subsampling tend to inflate subsampling probabilities of observations with low leverage scores and shrink those of high-leverage observations relative to BLEV. They show explicitly that this always holds for orthogonal design matrices. As a quick sense-check of the function introduced above we can generate a random orthogonal design matrix $X$ and plot subsampling probabilities with OPT and PL against those obtained with BLEV. Figure \@ref(fig:comp-methods) illustrates this relationship nicely. I have generated $X$ $(n \times p)$ with $n=`r n`$ and $p=`r p`$ using SVD:
+
+```{r rortho, code=readLines("R/rorthogonal.R")}
+```
+
+
+```{r comp-methods, fig.cap="Comparison of subsampling probabilities."}
+X <- rorthogonal(1000,100)
+# Subsampling methods:
+methods <- list(
+  "UNIF" = UNIF,
+  "BLEV" = BLEV,
+  "OPT" = OPT,
+  "PL" = PL
+)
+smpl_probs <- rbindlist(
+  lapply(
+    names(methods)[2:4],
+    function(i) {
+      method <- i
+      prob <- methods[[method]](X, y=NULL, m=NULL, prob_only=T)
+      return(data.table(prob=prob, method=method))
+    }
+  )
+)
+dt_plot <- rbindlist(
+  lapply(
+    names(methods)[3:4],
+    function(i) {
+      other_method <- i
+      x <- smpl_probs[method=="BLEV"]$prob
+      y <- smpl_probs[method==other_method]$prob
+      data.table(x=x, y=y, y_var=other_method)
+    }
+  )
+)
+ggplot(dt_plot, aes(x=x, y=y)) +
+  geom_abline(intercept = 0, slope=1, linetype="dashed") +
+  geom_point(shape=1) +
+  facet_grid(
+    cols=vars(y_var)
+  ) +
+  labs(
+    x="BLEV",
+    y=""
+  )
+```
+
+
 ## Emprirical evaluation {#empir}
 
 ### Reproducing @zhu2015optimal
@@ -339,23 +396,24 @@ In R we will use the following function for this purpose:
 ```
 
 ```{r zhu-data}
+set.seed(1)
 library(expm)
-scale_down <- 5
-n <- 5000/scale_down
-p <- 50/scale_down
+scale_down <- 10
+n <- 1000
+p <- 3
 matrix_grid <- expand.grid(i=1:p,j=1:p)
 Sigma <- matrix(rep(0,p^2),p,p)
 for (x in 1:nrow(matrix_grid)) {
   i <- matrix_grid$i[x]
   j <- matrix_grid$j[x]
-  Sigma[i,j] <- 2 * (0.8)^(scale_down*abs(i-j))
+  Sigma[i,j] <- 2 * (0.8)^(abs(i-j))
 }
 # 1.) Design matrix (as in Zhu et al): ----
-GA <- matrix(rnorm(n*p), nrow = n, ncol = p) %*% t(sqrtm(Sigma))
+GA <- matrix(rnorm(n*p), nrow = n, ncol = p) %*% sqrtm(t(Sigma))
 # Gaussian mixture:
 gaus_mix <- list(
-  gaus_1 = matrix(rnorm(n*p), nrow = n, ncol = p) %*% t(sqrtm(Sigma)),
-  gaus_2 = matrix(rnorm(n*p), nrow = n, ncol = p) %*% t(sqrt(p/2) * sqrtm(Sigma))
+  gaus_1 = matrix(rnorm(n*p), nrow = n, ncol = p) %*% sqrtm(t(Sigma)),
+  gaus_2 = matrix(rnorm(n*p), nrow = n, ncol = p) %*% sqrtm((25 * t(Sigma)))
 )
 MG <- matrix(rep(0,n*p),n,p)
 for (i in 1:nrow(MG)) {
@@ -365,7 +423,7 @@ for (i in 1:nrow(MG)) {
 # Log-Gaussian:
 LN <- exp(GA)
 # T-distribution:
-T1 <- matrix(rt(n*p,1), nrow = n, ncol = p) %*% t(sqrtm(Sigma)) 
+T1 <- matrix(rt(n*p,1), nrow = n, ncol = p) %*% sqrtm(t(Sigma))
 # Truncated T:
 TT <- T1
 TT[TT>p] <- p
@@ -388,14 +446,33 @@ data_sets <- lapply(
     list(X=X, y=y)
   }
 )
-# Subsampling methods:
-methods <- list(
-  "UNIF" = UNIF,
-  "BLEV" = BLEV,
-  "OPT" = OPT,
-  "PL" = PL
-)
 ```
+
+```{r distrib-data}
+data_density <- rbindlist(
+  lapply(
+    1:length(data_sets),
+    function(i) {
+      x <- c(data_sets[[i]]$X)
+      x_bar <- mean(c(data_sets[[i]]$X))
+      sigma <- sd(c(data_sets[[i]]$X))
+      x_std <- (x - x_bar) / sigma
+      data.table(value = x_std, data_set=names(data_sets)[i])
+    }
+  )
+)
+ggplot(data_density, aes(value)) +
+  geom_density() +
+  facet_wrap(
+    ~ data_set, 
+    scales = "free"
+  ) +
+  labs(
+    x="x (standardized)",
+    y="Density"
+  )
+```
+
 
 ```{r smpl-prob, eval=F}
 pgrid <- expand.grid(method = names(methods)[2:4], data=names(data_sets))
@@ -420,7 +497,7 @@ smpl_probs <- readRDS("outputs/smpl_probs.rds")
 ```
 
 
-```{r plot-smpl-prob, eval=F}
+```{r plot-smpl-prob, eval=F, fig.width=10, fig.height=4}
 pgrid <- expand.grid(method = names(methods)[3:4], data=names(data_sets))
 dt_plot <- rbindlist(
   lapply(
@@ -435,7 +512,8 @@ dt_plot <- rbindlist(
   )
 )
 ggplot(dt_plot, aes(x=x, y=y)) +
-  geom_point() +
+  geom_abline(intercept = 0, slope=1, linetype="dashed") +
+  geom_point(shape=1) +
   facet_wrap(
     y_var ~ data,
     scales = "free",
@@ -460,20 +538,26 @@ ggplot(
 
 ```{r}
 # Simulation parameters:
-m <- 10+round(sapply(1:7,function(i) (2^(i)*1e-3)) * n)
+m <- c()
+counter <- 1
+while(length(m)<7 & max(m/n)<.1) {
+  temp <- max(p,(2^(counter)*1e-3) * n)
+  m <- unique(c(m, temp))
+  counter <- counter + 1
+}
 weighted <- c(T,F)
 pgrid <- data.table(
   expand.grid(
     m=m, 
     method=names(methods), 
     weighted=weighted, 
-    data_set=c("TT","MG","LN")
+    data_set=names(data_sets)
   )
 )
 ```
 
 ```{r,eval=F}
-set.seed(111)
+set.seed(1)
 grid_search <- rbindlist(
   lapply(
     1:nrow(pgrid),

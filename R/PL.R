@@ -1,11 +1,11 @@
 PL <- function(Phi, y, m, weighted=F, rand_state=NULL, plot_wgts=F, prob_only=F) {
-  l2_norms <- sapply(
+  predictor_len <- sapply(
     1:nrow(Phi),
     function(i) {
       norm(as.matrix(Phi[i,]), type="f")
     }
   )
-  prob <- sapply(l2_norms, function(i) i/sum(l2_norms))
+  prob <- sapply(predictor_len, function(i) i/sum(predictor_len))
   # Plot:
   if (plot_wgts) {
     plot(prob, t="l", ylab="Sampling probability")
@@ -32,7 +32,8 @@ PL <- function(Phi, y, m, weighted=F, rand_state=NULL, plot_wgts=F, prob_only=F)
     return(
       list(
         fitted = y_hat,
-        coeff = beta_hat
+        coeff = beta_hat,
+        prob = prob
       )
     )
   }
