@@ -1,9 +1,24 @@
-BLEV <- function(Phi, y, m, weighted=F, rand_state=NULL, plot_wgts=F, prob_only=F) {
+OPT <- function(Phi, y, m, weighted=F, rand_state=NULL, plot_wgts=F, prob_only=F) {
+  n <- nrow(Phi)
+  # Leverage scores:
   svd_Phi <- svd(Phi)
   U <- svd_Phi$u
   H <- tcrossprod(U)
   h <- diag(H)
-  prob <- h/ncol(Phi)
+  # Euclidian norms:
+  predictor_len <- sapply(
+    1:nrow(Phi),
+    function(i) {
+      norm(as.matrix(Phi[i,]), type="f")
+    }
+  )
+  # Optimal sampling probabilities:
+  prob <- sapply(
+    1:n, 
+    function(i) {
+      (sqrt(1-h[i]) * predictor_len[i]) / crossprod(sqrt(1-h),predictor_len)[1]
+    }
+  )
   # Plot:
   if (plot_wgts) {
     plot(prob, t="l", ylab="Sampling probability")

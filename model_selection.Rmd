@@ -14,6 +14,16 @@ bibliography: bib.bib
 ```{r setup, include=F}
 rm(list=ls())
 knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
+# Import helper functions:
+helper_functions <- list.files("R")
+invisible(
+  lapply(
+    helper_functions,
+    function(i) {
+      source(paste0("R/",i))
+    }
+  )
+)
 ```
 
 The goal of this exercise is to investigate if and how systematic sub-sampling in situations where $n>>p$ can improve Bayesian sequential learning. For simulation exercises we will closely follow Chapter 3 of @bishop2006pattern. The note is structured as follows: to set the stage for the final investigation in the first [section](#bias) I briefly reproduce the example in @bishop2006pattern on the bias-variance trade-off. The following [section](#subsampling) then introduces sub-sampling. The ideas are then brought together in the following section. The final section applies the developed ideas to some example data and concludes.
@@ -22,7 +32,6 @@ The goal of this exercise is to investigate if and how systematic sub-sampling i
 
 ```{r}
 # Generate data: ----
-source("R/sinusoidal.R")
 n <- 25
 p <- 24
 a <- 0
@@ -42,7 +51,6 @@ dt_true <- data.table(y,x)
 pl <- ggplot(data=dt_true, aes(x=x, y=y)) +
   geom_line()
 # Simulate data: ----
-source("R/sim_sinusoidal.R")
 n_draws <- 3
 dt_star <- rbindlist(
   lapply(
@@ -106,9 +114,6 @@ As in @bishop2006pattern we proceed as follows for each choice of $\lambda$ and 
 5. Predict $\hat{y}_k^*=\Phi \beta_k^*$.
 
 ```{r}
-source("R/gauss_kernel.R")
-source("R/regularized_ls.R")
-source("R/extract_features.R")
 Phi <- cbind(
   rep(1,n),
   sapply(
@@ -203,29 +208,6 @@ ggplot(data=dt_plot[draw<=25], aes(y=value, x=x, colour=colour_group, group=draw
 
 
 ## Sub-sampling methods {#subsampling}
-
-```{r}
-n <- 1000
-m <- 25
-p <- 24
-a <- 0
-b <- 1
-x <- seq(a,b,length.out = n)
-y <- sinusoidal(x)
-v <- 0.3
-mu <- seq(a,b,length.out = p)
-Phi <- cbind(
-  rep(1,n),
-  sapply(
-    1:length(mu),
-    function(p) {
-      mu_p <- mu[p]
-      gauss_kernel(x=x, mu=mu_p, s = s)
-    }
-  )
-)
-```
-
 
 Let us now consider the case for sub-sampling: $n >> p$. We continue with the sinusoidal function from above but now look at the case where the number of observations is $n=`r n`$ and the number of features is $p=`r p`$. Suppose we are interested in estimating $\hat\beta_m$ instead of $\hat\beta_m$ where $p\le m=`r m`<<n$ with $m$ freely chosen by us. In practice we may want to do this to avoid high computational costs associated with large $n$. Or perhaps we are only allowed to load to access $m$ observations at a time. The basic algorithm for performing estimating $\hat\beta_m$ is as follows:
 
@@ -346,6 +328,280 @@ This still has computational costs of order $\mathcal{O}(np^2)$. But now it beco
 PL subsampling is associated with computational costs of order $\mathcal{O}(np)$ so a great improvement in particular when both $n$ and $p$ are large. 
 
 ## Emprirical evaluation {#empir}
+
+### Reproducing @zhu2015optimal
+
+We proceed as in @zhu2015optimal ...
+
+In R we will use the following function for this purpose:
+
+```{r class.source = "fold-show", code=readLines("R/sim_subsampling.R")}
+```
+
+```{r zhu-data}
+library(expm)
+scale_down <- 5
+n <- 5000/scale_down
+p <- 50/scale_down
+matrix_grid <- expand.grid(i=1:p,j=1:p)
+Sigma <- matrix(rep(0,p^2),p,p)
+for (x in 1:nrow(matrix_grid)) {
+  i <- matrix_grid$i[x]
+  j <- matrix_grid$j[x]
+  Sigma[i,j] <- 2 * (0.8)^(scale_down*abs(i-j))
+}
+# 1.) Design matrix (as in Zhu et al): ----
+GA <- matrix(rnorm(n*p), nrow = n, ncol = p) %*% t(sqrtm(Sigma))
+# Gaussian mixture:
+gaus_mix <- list(
+  gaus_1 = matrix(rnorm(n*p), nrow = n, ncol = p) %*% t(sqrtm(Sigma)),
+  gaus_2 = matrix(rnorm(n*p), nrow = n, ncol = p) %*% t(sqrt(p/2) * sqrtm(Sigma))
+)
+MG <- matrix(rep(0,n*p),n,p)
+for (i in 1:nrow(MG)) {
+  x <- sample(1:2,1)
+  MG[i,] <- gaus_mix[[x]][i,]
+}
+# Log-Gaussian:
+LN <- exp(GA)
+# T-distribution:
+T1 <- matrix(rt(n*p,1), nrow = n, ncol = p) %*% t(sqrtm(Sigma)) 
+# Truncated T:
+TT <- T1
+TT[TT>p] <- p
+TT[TT<(-p)] <- -p
+data_sets <- list(
+  GA = list(X = GA),
+  MG = list(X = MG),
+  LN = list(X = LN),
+  TT = list(X = TT),
+  T1 = list(X = T1)
+)
+# 2.) Outcome:
+data_sets <- lapply(
+  data_sets,
+  function(i) {
+    X <- i[["X"]]
+    beta <- c(rep(1,ceiling(0.6*p)),rep(0.1,floor(0.4*p)))
+    eps <- rnorm(n=n,mean=0,sd=10)
+    y <- X %*% beta + eps
+    list(X=X, y=y)
+  }
+)
+# Subsampling methods:
+methods <- list(
+  "UNIF" = UNIF,
+  "BLEV" = BLEV,
+  "OPT" = OPT,
+  "PL" = PL
+)
+```
+
+```{r smpl-prob, eval=F}
+pgrid <- expand.grid(method = names(methods)[2:4], data=names(data_sets))
+smpl_probs <- rbindlist(
+  lapply(
+    1:nrow(pgrid),
+    function(i) {
+      method <- as.character(pgrid$method[i])
+      data_set <- pgrid$data[i]
+      X <- data_sets[[data_set]]$X
+      y <- data_sets[[data_set]]$y
+      prob <- methods[[method]](X, y, m=NULL, prob_only=T)
+      return(data.table(prob=prob, method=method, data=data_set))
+    }
+  )
+)
+saveRDS(smpl_probs, "outputs/smpl_probs.rds")
+```
+
+```{r load-smpl-probs}
+smpl_probs <- readRDS("outputs/smpl_probs.rds")
+```
+
+
+```{r plot-smpl-prob, eval=F}
+pgrid <- expand.grid(method = names(methods)[3:4], data=names(data_sets))
+dt_plot <- rbindlist(
+  lapply(
+    1:nrow(pgrid),
+    function(i) {
+      other_method <- as.character(pgrid$method[i])
+      data_set <- pgrid$data[i]
+      x <- smpl_probs[method=="BLEV" & data==data_set]$prob
+      y <- smpl_probs[method==other_method & data==data_set]$prob
+      data.table(x=x, y=y, y_var=other_method, data=data_set)
+    }
+  )
+)
+ggplot(dt_plot, aes(x=x, y=y)) +
+  geom_point() +
+  facet_wrap(
+    y_var ~ data,
+    scales = "free",
+    ncol=length(data_sets)
+  ) +
+  labs(
+    x="BLEV",
+    y=""
+  )
+```
+
+```{r, fig.height=4, fig.width=10}
+ggplot(
+  data = smpl_probs,
+  aes(x=data, y=log(prob)) 
+) +
+  geom_boxplot() +
+  facet_grid(
+    col=vars(method)
+  )
+```
+
+```{r}
+# Simulation parameters:
+m <- 10+round(sapply(1:7,function(i) (2^(i)*1e-3)) * n)
+weighted <- c(T,F)
+pgrid <- data.table(
+  expand.grid(
+    m=m, 
+    method=names(methods), 
+    weighted=weighted, 
+    data_set=c("TT","MG","LN")
+  )
+)
+```
+
+```{r,eval=F}
+set.seed(111)
+grid_search <- rbindlist(
+  lapply(
+    1:nrow(pgrid),
+    function(i) {
+      m <- pgrid[i,m]
+      estimator_name <- pgrid[i,method] 
+      estimator <- methods[[estimator_name]]
+      weighted <- pgrid[i, weighted]
+      data_set <- pgrid$data[i]
+      X <- data_sets[[data_set]]$X
+      y <- data_sets[[data_set]]$y
+      output <- sim_subsampling(X, y, m, estimator, weighted=weighted)
+      output[,m:=m]
+      output[,method:=estimator_name]
+      output[,weighted:=weighted]
+      output[,data_set:=data_set]
+    }
+  )
+)
+grid_search[,weighted:=factor(weighted)]
+levels(grid_search$weighted) <- c("OLS","WLS")
+grid_search[,log_value:=log(value)]
+saveRDS(grid_search, file="outputs/grid_search_zhu.rds")
+```
+
+```{r}
+grid_search <- readRDS("outputs/grid_search_zhu.rds")
+p_list <- lapply(
+  1:2,
+  function(i) {
+    ggplot(
+      data=grid_search[weighted==levels(weighted)[i]], 
+      aes(x=m/n, y=log_value, colour=method)
+    ) +
+      geom_line() +
+      geom_point() +
+      facet_wrap(
+        variables ~ data_set,
+        scales = "free",
+        nrow=3
+      ) +
+      scale_color_discrete(
+        name="Subsampling method:"
+      ) +
+      labs(
+        x="m/n",
+        y="Logarithm",
+        title=levels(grid_search$weighted)[i]
+      ) 
+  }
+)
+names(p_list) <- levels(grid_search$weighted)
+```
+
+### Applied to sinusoidal function
+
+```{r}
+# Function parameters:
+n <- 1000
+p <- 9
+a <- 0
+b <- 1
+x <- seq(a,b,length.out = n)
+y_true <- sinusoidal(x)
+y <- sim_sinusoidal(n)
+v <- 0.3
+mu <- seq(a,b,length.out = p)
+Phi <- cbind(
+  rep(1,n),
+  sapply(
+    1:length(mu),
+    function(p) {
+      mu_p <- mu[p]
+      gauss_kernel(x=x, mu=mu_p, s = s)
+    }
+  )
+)
+# Simulation parameters:
+m <- c(0.05,0.10,0.15,0.20,0.25,0.50,0.75) * n
+weighted <- c(T,F)
+param_grid <- data.table(expand.grid(m=m, method=names(methods), weighted=weighted))
+```
+
+
+
+```{r, eval=T}
+set.seed(111)
+grid_search <- rbindlist(
+  lapply(
+    1:nrow(param_grid),
+    function(i) {
+      m <- param_grid[i,m]
+      estimator_name <- param_grid[i,method] 
+      estimator <- methods[[estimator_name]]
+      weighted <- param_grid[i, weighted]
+      output <- sim_subsampling(Phi, y, m, estimator, weighted=weighted)
+      output[,m:=m]
+      output[,method:=estimator_name]
+      output[,weighted:=weighted]
+    }
+  )
+)
+grid_search[,weighted:=factor(weighted)]
+levels(grid_search$weighted) <- c("OLS","WLS")
+grid_search[,log_value:=log(value)]
+saveRDS(grid_search, file="outputs/grid_search.rds")
+```
+
+```{r}
+grid_search <- readRDS("outputs/grid_search.rds")
+ggplot(
+  data=grid_search, 
+  aes(x=m/n, y=log_value, colour=method)
+) +
+  geom_line() +
+  geom_point() +
+  facet_grid(
+    rows=vars(variables),
+    cols = vars(weighted)
+  ) +
+  scale_color_discrete(
+    name="Subsampling method:"
+  ) +
+  labs(
+    x="m/n",
+    y="Logarithm"
+  ) 
+```
 
 
 

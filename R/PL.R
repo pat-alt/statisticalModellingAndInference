@@ -1,33 +1,39 @@
-PL <- function(Phi, y, weighted=F, rand_state=NULL, plot_wgts=F) {
+PL <- function(Phi, y, m, weighted=F, rand_state=NULL, plot_wgts=F, prob_only=F) {
   l2_norms <- sapply(
     1:nrow(Phi),
     function(i) {
-      norm(Phi[i,], type="2")
+      norm(as.matrix(Phi[i,]), type="f")
     }
   )
   prob <- sapply(l2_norms, function(i) i/sum(l2_norms))
+  # Plot:
   if (plot_wgts) {
     plot(prob, t="l", ylab="Sampling probability")
   }
-  indices <- sample(
-    x = 1:n, 
-    size = m,
-    replace = T,
-    prob = prob
-  )
-  Phi_m <- Phi[indices,]
-  y_m <- y[indices]
-  weights <- prob[indices]
-  if (weighted) {
-    beta_hat <- wls_qr(Phi_m, y_m, weights)
+  # Output:
+  if (prob_only) {
+    return(prob)
   } else {
-    beta_hat <- qr.solve(Phi_m, y_m)
-  }
-  y_hat <- c(Phi %*% beta_hat)
-  return(
-    list(
-      fitted = y_hat,
-      coeff = beta_hat
+    indices <- sample(
+      x = 1:n, 
+      size = m,
+      replace = T,
+      prob = prob
     )
-  )
+    Phi_m <- Phi[indices,]
+    y_m <- y[indices]
+    weights <- prob[indices]
+    if (weighted) {
+      beta_hat <- wls_qr(Phi_m, y_m, weights)
+    } else {
+      beta_hat <- qr.solve(Phi_m, y_m)
+    }
+    y_hat <- c(Phi %*% beta_hat)
+    return(
+      list(
+        fitted = y_hat,
+        coeff = beta_hat
+      )
+    )
+  }
 }

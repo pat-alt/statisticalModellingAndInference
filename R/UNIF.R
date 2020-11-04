@@ -1,4 +1,4 @@
-UNIF <- function(Phi, y, weighted=F, rand_state=NULL) {
+UNIF <- function(Phi, y, m, weighted=F, rand_state=NULL) {
   if (!is.null(rand_state)) {
     set.seed(rand_state)
   }
@@ -6,11 +6,11 @@ UNIF <- function(Phi, y, weighted=F, rand_state=NULL) {
   Phi_m <- Phi[indices,]
   y_m <- y[indices]
   beta_hat <- qr.solve(Phi_m, y_m)
-  y_hat <- c(Phi %*% beta_hat_random)
+  y_hat <- c(Phi %*% beta_hat)
   return(
     list(
       fitted = y_hat,
-      coeff = beta_hat,
+      coeff = beta_hat
     )
   )
 }

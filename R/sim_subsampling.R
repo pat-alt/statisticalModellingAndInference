@@ -1,19 +1,54 @@
-sim_subsampling <- function(Phi, y, subsample_estimator, J=1000, bias_correct=T, B=1000, ...) {
+sim_subsampling <- function(Phi, y, m, subsample_estimator, J=1000, bias_correct=F, B=1000, ...) {
   # Compute full sample OLS estimator:
   y_hat_ols <- qr.fitted(qr.default(Phi),y)
   # Compute J predictions from subsample estimator:
-  output <- rbindlist(
-    lapply(
-      1:J,
-      function(j) {
-        estimate <- subsample_estimator(Phi, y, ...) # subsample estimate
-        e <- y_hat_ols - estimate$fitted # residual
-        mse <- crossprod(e) # in-sample MSE
-        if (bias_correct) { 
-          # Bootstrap bias-correction term:
-          
+  run_J_predictions = function() {
+    output <- rbindlist(
+      lapply(
+        1:J,
+        function(j) {
+          estimate <- subsample_estimator(Phi, y, m, ...) # subsample estimate
+          if (bias_correct) { 
+            # Bootstrap bias-correction term:
+            w <- 0
+          } else {
+            w <- 0
+          }
+          data.table(
+            y_hat_ols = y_hat_ols,
+            y_hat_subsample = estimate$fitted,
+            i = 1:length(y_hat_ols),
+            j = j,
+            w = w
+          )
         }
-      }
+      )
     )
+    # Compute variance, bias and MSE:
+    output[,avg_y_hat_subsample := mean(y_hat_subsample), by=.(i)]
+    V <- output[,.(V_b=norm(as.matrix(y_hat_subsample - avg_y_hat_subsample), type="f")^2),by=.(j)][,mean(V_b)]
+    bias_sq <- output[,.(avg_bias_i = mean(y_hat_ols - y_hat_subsample)), by=.(i)][,norm(as.matrix(avg_bias_i, type="f")^2)]
+    w <- output[,mean(w)]
+    # mse <- output[,.(mse_b=norm(as.matrix(y_hat_ols - y_hat_subsample), type="f")^2),by=.(j)][,mean(mse_b)]
+    mse <- V + bias_sq + w
+    output <- data.table(
+      value = c(V,bias_sq,mse),
+      variables = c("V", "Squared bias", "MSE")
+    )
+  }
+  # Run with tryCatch:
+  output <- tryCatch(
+    run_J_predictions(),
+    error=function(e) {
+      warning("Error occured. Returning NaNs.")
+      output <- data.table(
+        value = rep(NA, 3),
+        variables = c("V", "Squared bias", "MSE")
+      )
+      return(output)
+    }
+  )
+  return(
+    output
   )
 }
