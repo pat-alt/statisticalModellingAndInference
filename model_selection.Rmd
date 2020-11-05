@@ -1,6 +1,5 @@
 ---
-title: "Subsampling"
-subtitle: "Model selection"
+title: "Model selection"
 author: "Patrick Altmeyer"
 date: "`r format(Sys.Date(), '%d %B, %Y')`"
 output: 
@@ -93,7 +92,7 @@ $$
 \end{equation}
 $$
 
-with $v=`r v`$. We fix the number of kernels $p=`r p`$ (and hence the number of features $M=p+1=`r p+1`$) as well as the spatial scale $s=`r s`$. To vary the complexity of the model we use regularized least-squares and let the regularization parameter $lambda$ vary
+with $v=`r v`$. We fix the number of kernels $p=`r p`$ (and hence the number of features $M=p+1=`r p+1`$) as well as the spatial scale $s=`r s`$. To vary the complexity of the model we use a form of regularized least-squares (*Ridge regression*) and let the regularization parameter $lambda$ vary
 
 $$
 \begin{equation} 
@@ -205,9 +204,18 @@ ggplot(data=dt_plot[draw<=25], aes(y=value, x=x, colour=colour_group, group=draw
     cols = vars(facet_group)
   )
 ```
+## Regularization {#regul}
 
+## Dimensionality reduction {#dim-red}
 
 ## Sub-sampling methods {#subsampling}
+
+```{r}
+n <- 1000
+m <- 10
+p <- 10
+```
+
 
 Let us now consider the case for sub-sampling: $n >> p$. We continue with the sinusoidal function from above but now look at the case where the number of observations is $n=`r n`$ and the number of features is $p=`r p`$. Suppose we are interested in estimating $\hat\beta_m$ instead of $\hat\beta_m$ where $p\le m=`r m`<<n$ with $m$ freely chosen by us. In practice we may want to do this to avoid high computational costs associated with large $n$. Or perhaps we are only allowed to load to access $m$ observations at a time. The basic algorithm for performing estimating $\hat\beta_m$ is as follows:
 
@@ -342,7 +350,7 @@ As discussed in @zhu2015optimal both OPT and PL subsampling tend to inflate subs
 
 
 ```{r comp-methods, fig.cap="Comparison of subsampling probabilities."}
-X <- rorthogonal(1000,100)
+X <- rorthogonal(n,p)
 # Subsampling methods:
 methods <- list(
   "UNIF" = UNIF,
@@ -580,6 +588,7 @@ grid_search <- rbindlist(
 grid_search[,weighted:=factor(weighted)]
 levels(grid_search$weighted) <- c("OLS","WLS")
 grid_search[,log_value:=log(value)]
+levels(grid_search$methods)
 saveRDS(grid_search, file="outputs/grid_search_zhu.rds")
 ```
 
@@ -612,6 +621,14 @@ p_list <- lapply(
 names(p_list) <- levels(grid_search$weighted)
 ```
 
+```{r wls-zho}
+p_list$WLS
+```
+
+```{r ols-zho}
+p_list$OLS
+```
+
 ### Applied to sinusoidal function
 
 ```{r}
@@ -622,7 +639,7 @@ a <- 0
 b <- 1
 x <- seq(a,b,length.out = n)
 y_true <- sinusoidal(x)
-y <- sim_sinusoidal(n)
+y <- sim_sinusoidal(n)$y
 v <- 0.3
 mu <- seq(a,b,length.out = p)
 Phi <- cbind(
@@ -636,21 +653,27 @@ Phi <- cbind(
   )
 )
 # Simulation parameters:
-m <- c(0.05,0.10,0.15,0.20,0.25,0.50,0.75) * n
+m <- c()
+counter <- 1
+while(length(m)<7 & max(m/n)<.1) {
+  temp <- max(p+1,(2^(counter)*1e-3) * n)
+  m <- unique(c(m, temp))
+  counter <- counter + 1
+}
 weighted <- c(T,F)
 param_grid <- data.table(expand.grid(m=m, method=names(methods), weighted=weighted))
+plot(y, t="l")
 ```
 
 
-
-```{r, eval=T}
-set.seed(111)
+```{r, eval=F}
+set.seed(1)
 grid_search <- rbindlist(
   lapply(
     1:nrow(param_grid),
     function(i) {
       m <- param_grid[i,m]
-      estimator_name <- param_grid[i,method] 
+      estimator_name <- as.character(param_grid[i,method])
       estimator <- methods[[estimator_name]]
       weighted <- param_grid[i, weighted]
       output <- sim_subsampling(Phi, y, m, estimator, weighted=weighted)
@@ -663,11 +686,12 @@ grid_search <- rbindlist(
 grid_search[,weighted:=factor(weighted)]
 levels(grid_search$weighted) <- c("OLS","WLS")
 grid_search[,log_value:=log(value)]
-saveRDS(grid_search, file="outputs/grid_search.rds")
+grid_search[,method := factor(method, levels=c("UNIF", "BLEV", "OPT", "PL"))]
+saveRDS(grid_search, file="outputs/grid_search_sinus.rds")
 ```
 
 ```{r}
-grid_search <- readRDS("outputs/grid_search.rds")
+grid_search <- readRDS("outputs/grid_search_sinus.rds")
 ggplot(
   data=grid_search, 
   aes(x=m/n, y=log_value, colour=method)
@@ -686,6 +710,62 @@ ggplot(
     y="Logarithm"
   ) 
 ```
+
+## Optimal subsampling for treating class imbalance
+
+In binary classification problems we are often faced with the issue of imbalanced training data - one of the two classes is under-represented relative to the other. This generally makes classifiers less sensitive to the minority class which often is the class we want to predict. Suppose for example we wanted to predict the probability of death for patients who suffer from COVID-19. The case-fatality rate for the virus is significantly lower than 10% so any data we could obtain on patients would inevitably be imbalanced. 
+
+A common and straight-forward way to deal with this issue is to randomly over- or under-sample the training data. Let $y_i\in{0,1}$ for all $i=1,...,n$. We are interested in modelling $p_i=P(y_i=1|x_i)$ but our data is imbalanced: $n_{y=0}>>n_{y=1}$ where $n=n_{y=0}+n_{y=1}$. Then random over- and under-sampling works as follows:
+
+1. *Random oversampling*: draw $y_i$ from minority class $y_{n_{y=1}}$ with probability $\{\pi_i\}^{n_{y=1}}_{i=1}=1/n_{y=1}$ and append $y_{n_{y=1}}$ by $y_i$ so that $n_{y=1} \leftarrow n_{y=1}+1$ until $n_{y=0}=n_{y=1}$.
+2. *Random undersampling*: draw $y_i$ from majority class $y_{n_{y=0}}$ with probability $\{\pi_i\}^{n_{y=0}}_{i=0}=1/n_{y=0}$ and remove $y_i$ from $y_{n_{y=0}}$ so that $n_{y=0} \leftarrow n_{y=0}-1$ until $n_{y=0}=n_{y=1}$.
+  
+In a way both these methods correspond to uniform subsampling (UNIF) discussed above. We have already shown that more systematic subsampling approaches generally outperform uniform subsampling in basic linear regression problems. It would be interesting to see if we can apply these ideas to classification with imbalanced data. How exactly we can go about doing this should be straight-forward to see:
+
+3. *Non-juvenile undersampling*: draw $y_i$ from majority class $y_{n_{y=0}}$ with probability $1-\{\pi_i\}^{n_{y=0}}_{i=0}$ with $\{\pi_i\}^{n_{y=0}}_{i=0}$ defined by BLEV/OPT/PL. Remove $y_i$ from $y_{n_{y=0}}$ so that $n_{y=0} \leftarrow n_{y=0}-1$ until $n_{y=0}=n_{y=1}$.
+
+To remain in the subsampling framework we will focus on *undersampling* here.
+
+### Synthetic data
+
+```{r}
+n <- length(data_sets$GA$y)
+prob <- 0.05
+y <- sample(c(1,0), n, T, prob=c(prob,1-prob))
+```
+
+In this section we will use the same synthetic data sets as above for our design matrix $X$. But while above we sampled $y_i |x_i\sim \mathcal{N}(\beta^T x_i,\sigma)$, here we will simulate a single draw from $y |X \sim \text{Bernoulli}(p)$, where in order to create imbalance we set $p=`r prob`$ (an overestimate of the true case-fatality rate of COVID if you want). To model the probability of $y=1$ we will use logistic regression:
+
+$$
+\begin{equation} 
+\begin{aligned}
+&& p_i&= \frac{ \exp( \beta^T x_i)}{1 + \exp( \beta^T x_i)}
+\end{aligned}
+(\#eq:log_reg)
+\end{equation}
+$$
+
+The model can be fitted through iterative re-weighted least-squares (IRLS) (see for example @wasserman2013all) which in R can be implemented as below. It also implements weighted logistic regression which we will use in the same way we used weighted least-squares above. Alternatively one could of course just use `glm([formula], family="binomial")` to do this in R.
+
+```{r, code=readLines("R/logit_irls")}
+```
+
+To score our probabilistic predictions we will once again use the mean-squared error, although technically in this setting we would speak of the *Brier score* (see (here)[https://en.wikipedia.org/wiki/Brier_score]):
+
+$$
+\begin{equation} 
+\begin{aligned}
+&& BS&= \frac{1}{n} \sum_{i=1}^{n} (y_i-p_i)^2 \\
+\end{aligned}
+(\#eq:brier)
+\end{equation}
+$$
+Of course other scoring functions are commonly considered for classification problems (see (here) [https://stats.stackexchange.com/questions/172945/rmse-root-mean-squared-error-for-logistic-models] for a discussion). But using the *Brier score* naturally continues the discussing [above](#subsampling).
+
+```{r}
+
+```
+
 
 
 
