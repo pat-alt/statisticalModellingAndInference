@@ -11,7 +11,7 @@ logit_irls <- function(X, y, beta_0=NULL, tau=1e-9, max_iter=10000, weights=NULL
   }
   # Initialization: ----
   if (is.null(beta_0)) {
-    beta_latest <- matrix(rep(0, p)) # naive first guess
+    beta_latest <- matrix(rep(1, p)) # naive first guess
   }
   W <- diag(n)
   can_still_improve <- T
@@ -24,7 +24,7 @@ logit_irls <- function(X, y, beta_0=NULL, tau=1e-9, max_iter=10000, weights=NULL
     diag(W) <- p_y*(1-p_y)
     Z <- X %*% beta_latest + qr.solve(W) %*% (y-p_y)
     beta_latest <- qr.solve(crossprod(X,W%*%X),crossprod(X,W%*%Z))
-    can_still_improve <- any(abs(df_latest)>tau) # convergence reached?
+    can_still_improve <- mean(abs(df_latest))>tau # convergence reached?
     iter <- iter + 1
   }
   return(

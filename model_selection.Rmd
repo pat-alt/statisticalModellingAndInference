@@ -763,7 +763,53 @@ $$
 Of course other scoring functions are commonly considered for classification problems (see (here) [https://stats.stackexchange.com/questions/172945/rmse-root-mean-squared-error-for-logistic-models] for a discussion). But using the *Brier score* naturally continues the discussing [above](#subsampling).
 
 ```{r}
+# Simulation parameters:
+n <- 1000
+m <- 2^(3:7)*1e-3
+weighted <- c(T,F)
+pgrid <- data.table(
+  expand.grid(
+    m=m, 
+    method=names(methods), 
+    weighted=weighted, 
+    data_set=names(data_sets)
+  )
+)
+methods <- list(
+  "UNIF" = UNIF,
+  "BLEV" = BLEV,
+  "OPT" = OPT,
+  "PL" = PL
+)
+```
 
+```{r, eval=F}
+set.seed(1)
+grid_search <- rbindlist(
+  lapply(
+    1:nrow(pgrid),
+    function(i) {
+      m <- pgrid[i,m]
+      estimator_name <- pgrid[i,method] 
+      estimator <- methods[[estimator_name]]
+      weighted <- pgrid[i, weighted]
+      data_set <- pgrid$data[i]
+      X <- data_sets[[data_set]]$X
+      y <- sample(c(1,0),size=n,rep=T,prob = c(m,1-m))
+      vars <- undersampler(X,y) # undersampler instance
+      output <- sim_undersampling(vars, estimator, weighted=weighted)
+      output[,m:=m]
+      output[,method:=estimator_name]
+      output[,weighted:=weighted]
+      output[,data_set:=data_set]
+    }
+  )
+)
+grid_search[,weighted:=factor(weighted)]
+levels(grid_search$weighted) <- c("OLS","WLS")
+grid_search[,log_value:=log(value)]
+levels(grid_search$methods)
+saveRDS(grid_search, file="outputs/grid_search_zhu.rds")
 ```
 
 

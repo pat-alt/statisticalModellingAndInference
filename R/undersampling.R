@@ -2,9 +2,6 @@
 undersampler <- function(X, y) {
   n_min <- min(table(y))
   n_maj <- max(table(y))
-  if(!all(X[,1]==1)) {
-    X <- cbind(1,X)
-  }
   v <- list(
     X = X,
     y = y,
@@ -27,7 +24,11 @@ UNIF.undersampler <- function(vars, weighted=F, rand_state=NULL) {
   indices <- sample(1:n, size=m)
   X_m <- X[indices,]
   y_m <- y[indices]
-  beta_hat <- logit_irls(X_m, y_m)$coeff
+  beta_hat <- glm(y~X,family = "binomial")$coefficients
+  # beta_hat <- logit_irls(X_m, y_m)$coeff
+  if(!all(X[,1]==1)) {
+    X <- cbind(1,X)
+  }
   y_hat <- c(X %*% beta_hat)
   p_y <- exp(y_hat)/(1+exp(y_hat))
   
@@ -69,11 +70,14 @@ BLEV.undersampler <- function(vars, weighted=F, rand_state=NULL) {
   weights <- prob[indices]
   # Fit:
   if (weighted) {
-    beta_hat <- logit_irls(X_m, y_m, weights)$coeff
+    beta_hat <- glm(y_m~X_m,family = "binomial", weights = weights)$coefficients
   } else {
-    beta_hat <- logit_irls(X_m, y_m)$coeff
+    beta_hat <- glm(y_m~X_m,family = "binomial")$coefficients
   }
   # Predict:
+  if(!all(X[,1]==1)) {
+    X <- cbind(1,X)
+  }
   y_hat <- c(X %*% beta_hat)
   p_y <- exp(y_hat)/(1+exp(y_hat))
   
@@ -129,11 +133,14 @@ OPT.undersampler <- function(vars, weighted=F, rand_state=NULL) {
   weights <- prob[indices]
   # Fit:
   if (weighted) {
-    beta_hat <- logit_irls(X_m, y_m, weights)$coeff
+    beta_hat <- glm(y_m~X_m,family = "binomial", weights = weights)$coefficients
   } else {
-    beta_hat <- logit_irls(X_m, y_m)$coeff
+    beta_hat <- glm(y_m~X_m,family = "binomial")$coefficients
   }
   # Predict:
+  if(!all(X[,1]==1)) {
+    X <- cbind(1,X)
+  }
   y_hat <- c(X %*% beta_hat)
   p_y <- exp(y_hat)/(1+exp(y_hat))
   
@@ -180,11 +187,14 @@ PL.undersampler <- function(vars, weighted=F, rand_state=NULL) {
   weights <- prob[indices]
   # Fit:
   if (weighted) {
-    beta_hat <- logit_irls(X_m, y_m, weights)$coeff
+    beta_hat <- glm(y_m~X_m,family = "binomial", weights = weights)$coefficients
   } else {
-    beta_hat <- logit_irls(X_m, y_m)$coeff
+    beta_hat <- glm(y_m~X_m,family = "binomial")$coefficients
   }
   # Predict:
+  if(!all(X[,1]==1)) {
+    X <- cbind(1,X)
+  }
   y_hat <- c(X %*% beta_hat)
   p_y <- exp(y_hat)/(1+exp(y_hat))
   return(
