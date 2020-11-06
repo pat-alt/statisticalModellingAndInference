@@ -13,16 +13,6 @@ bibliography: bib.bib
 ```{r setup, include=F}
 rm(list=ls())
 knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
-# Import helper functions:
-helper_functions <- list.files("R")
-invisible(
-  lapply(
-    helper_functions,
-    function(i) {
-      source(paste0("R/",i))
-    }
-  )
-)
 ```
 
 The goal of this exercise is to investigate if and how systematic sub-sampling in situations where $n>>p$ can improve Bayesian sequential learning. For simulation exercises we will closely follow Chapter 3 of @bishop2006pattern. The note is structured as follows: to set the stage for the final investigation in the first [section](#bias) I briefly reproduce the example in @bishop2006pattern on the bias-variance trade-off. The following [section](#subsampling) then introduces sub-sampling. The ideas are then brought together in the following section. The final section applies the developed ideas to some example data and concludes.
@@ -30,6 +20,10 @@ The goal of this exercise is to investigate if and how systematic sub-sampling i
 ## Bias-variance tradeoff {#bias}
 
 ```{r}
+source("R/gauss_kernel.R")
+source("R/sinusoidal.R")
+source("R/sim_sinusoidal.R")
+source("R/regularized_ls.R")
 # Generate data: ----
 n <- 25
 p <- 24
@@ -211,6 +205,13 @@ ggplot(data=dt_plot[draw<=25], aes(y=value, x=x, colour=colour_group, group=draw
 ## Sub-sampling methods {#subsampling}
 
 ```{r}
+source("R/UNIF.R")
+source("R/BLEV.R")
+source("R/OPT.R")
+source("R/PL.R")
+source("R/wls_qr.R")
+source("R/rorthogonal.R")
+source("R/sim_subsampling.R")
 n <- 1000
 m <- 10
 p <- 10
@@ -281,6 +282,7 @@ $$
 (\#eq:hat-mat)
 \end{equation}
 $$
+
 where the diagonal elements $h_{ii}$ correspond to the leverage scores we're after. Following @zhu2015optimal we will use (compact) singular value decomposition to obtain $\mathbb{H}$ rather than computing \@ref(eq:hat-mat) directly. This has the benefit that there exist exceptionally stable numerical algorithms to compute SVD. (**source**) To see why we can use SVD to obtain $\mathbb{H}$ consider the following:
 
 ![From SVD to leverage](www/svd_leverage.png)
@@ -713,6 +715,13 @@ ggplot(
 
 ## Optimal subsampling for treating class imbalance
 
+```{r}
+source("R/undersampling.R")
+source("R/sim_undersampling.R")
+source("R/logit_irls.R")
+```
+
+
 In binary classification problems we are often faced with the issue of imbalanced training data - one of the two classes is under-represented relative to the other. This generally makes classifiers less sensitive to the minority class which often is the class we want to predict. Suppose for example we wanted to predict the probability of death for patients who suffer from COVID-19. The case-fatality rate for the virus is significantly lower than 10% so any data we could obtain on patients would inevitably be imbalanced. 
 
 A common and straight-forward way to deal with this issue is to randomly over- or under-sample the training data. Let $y_i\in{0,1}$ for all $i=1,...,n$. We are interested in modelling $p_i=P(y_i=1|x_i)$ but our data is imbalanced: $n_{y=0}>>n_{y=1}$ where $n=n_{y=0}+n_{y=1}$. Then random over- and under-sampling works as follows:
@@ -722,7 +731,7 @@ A common and straight-forward way to deal with this issue is to randomly over- o
   
 In a way both these methods correspond to uniform subsampling (UNIF) discussed above. We have already shown that more systematic subsampling approaches generally outperform uniform subsampling in basic linear regression problems. It would be interesting to see if we can apply these ideas to classification with imbalanced data. How exactly we can go about doing this should be straight-forward to see:
 
-3. *Non-juvenile undersampling*: draw $y_i$ from majority class $y_{n_{y=0}}$ with probability $1-\{\pi_i\}^{n_{y=0}}_{i=0}$ with $\{\pi_i\}^{n_{y=0}}_{i=0}$ defined by BLEV/OPT/PL. Remove $y_i$ from $y_{n_{y=0}}$ so that $n_{y=0} \leftarrow n_{y=0}-1$ until $n_{y=0}=n_{y=1}$.
+3. *Non-juvenile undersampling*: draw $n_{y=1}$ times from from majority class $y_{n_{y=0}}$ with probability $\{\pi_i\}^{n_{y=0}}_{i=0}$ defined by BLEV/OPT/PL. 
 
 To remain in the subsampling framework we will focus on *undersampling* here.
 
@@ -731,7 +740,7 @@ To remain in the subsampling framework we will focus on *undersampling* here.
 ```{r}
 n <- length(data_sets$GA$y)
 prob <- 0.05
-y <- sample(c(1,0), n, T, prob=c(prob,1-prob))
+# y <- sample(c(1,0), n, T, prob=c(prob,1-prob))
 ```
 
 In this section we will use the same synthetic data sets as above for our design matrix $X$. But while above we sampled $y_i |x_i\sim \mathcal{N}(\beta^T x_i,\sigma)$, here we will simulate a single draw from $y |X \sim \text{Bernoulli}(p)$, where in order to create imbalance we set $p=`r prob`$ (an overestimate of the true case-fatality rate of COVID if you want). To model the probability of $y=1$ we will use logistic regression:
@@ -808,8 +817,8 @@ grid_search <- rbindlist(
 grid_search[,weighted:=factor(weighted)]
 levels(grid_search$weighted) <- c("OLS","WLS")
 grid_search[,log_value:=log(value)]
-levels(grid_search$methods)
-saveRDS(grid_search, file="outputs/grid_search_zhu.rds")
+levels(grid_search$method)
+saveRDS(grid_search, file="outputs/grid_search_logit.rds")
 ```
 
 

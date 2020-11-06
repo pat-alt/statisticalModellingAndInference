@@ -1,5 +1,6 @@
 sim_undersampling <- function(vars, subsample_estimator, J=1000, ...) {
   # Compute full sample logit estimator:
+  # p_y_hat <- vars$y
   p_y_hat <- glm(vars$y~vars$X,family = "binomial")$fitted.values
   # Compute J predictions from subsample estimator:
   run_J_predictions = function() {
@@ -25,9 +26,12 @@ sim_undersampling <- function(vars, subsample_estimator, J=1000, ...) {
     # Compute variance, bias and MSE:
     output=na.omit(output) # for cases where estimation yielded NaNs (can happen when m->p)
     output[,avg_y_hat_subsample := mean(p_y_hat_subsample), by=.(i)]
-    V <- output[,.(V_b=norm(as.matrix(p_y_hat_subsample - avg_y_hat_subsample), type="f")^2),by=.(j)][,mean(V_b)]
-    bias_sq <- output[,.(avg_bias_i = mean(p_y_hat - p_y_hat_subsample)), by=.(i)][,norm(as.matrix(avg_bias_i, type="f")^2)]
-    mse_check <- output[,.(mse_b=norm(as.matrix(p_y_hat - p_y_hat_subsample), type="f")^2),by=.(j)][,mean(mse_b)]
+    # V <- output[,.(V_b=norm(as.matrix(p_y_hat_subsample - avg_y_hat_subsample), type="f")^2),by=.(j)][,mean(V_b)]
+    V <- output[,.(V_b=(1/n)*norm(as.matrix(p_y_hat_subsample - avg_y_hat_subsample), type="f")^2),by=.(j)][,mean(V_b)]
+    # bias_sq <- output[,.(avg_bias_i = mean(p_y_hat - p_y_hat_subsample)), by=.(i)][,norm(as.matrix(avg_bias_i, type="f")^2)]
+    bias_sq <- output[,.(avg_bias_i = mean(p_y_hat - p_y_hat_subsample)), by=.(i)][,(1/n)*norm(as.matrix(avg_bias_i, type="f")^2)]
+    # mse_check <- output[,.(mse_b=norm(as.matrix(p_y_hat - p_y_hat_subsample), type="f")^2),by=.(j)][,mean(mse_b)]
+    mse_check <- output[,.(mse_b=(1/n)*norm(as.matrix(p_y_hat - p_y_hat_subsample), type="f")^2),by=.(j)][,mean(mse_b)]
     mse <- V + bias_sq 
     if (abs(mse_check-mse)>1e-5) {
       warning(
