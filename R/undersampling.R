@@ -49,6 +49,7 @@ UNIF.undersampler <- function(vars, weighted=F, rand_state=NULL) {
   p_y <- exp(y_hat)/(1+exp(y_hat))
   return(
     list(
+      linear_predictors = y_hat,
       fitted = p_y,
       coeff = beta_hat
     )
@@ -96,6 +97,7 @@ BLEV.undersampler <- function(vars, weighted=F, rand_state=NULL) {
   
   return(
     list(
+      linear_predictors = y_hat,
       fitted = p_y,
       coeff = beta_hat
     )
@@ -153,9 +155,9 @@ OPT.undersampler <- function(vars, weighted=F, rand_state=NULL) {
   }
   y_hat <- c(X %*% beta_hat)
   p_y <- exp(y_hat)/(1+exp(y_hat))
-  
   return(
     list(
+      linear_predictors = y_hat,
       fitted = p_y,
       coeff = beta_hat
     )
@@ -210,6 +212,7 @@ PL.undersampler <- function(vars, weighted=F, rand_state=NULL) {
   p_y <- exp(y_hat)/(1+exp(y_hat))
   return(
     list(
+      linear_predictors = y_hat,
       fitted = p_y,
       coeff = beta_hat
     )

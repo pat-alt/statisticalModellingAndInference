@@ -1,3 +1,6 @@
+# Custom:
+data/latestdata.csv
+
 # History files
 .Rhistory
 .Rapp.history
