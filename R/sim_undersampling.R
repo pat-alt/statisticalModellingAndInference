@@ -1,6 +1,6 @@
 sim_undersampling <- function(vars, subsample_estimator, J=1000, ...) {
   # Compute full sample logit estimator:
-  y_hat <- glm(vars$y~vars$X,family = "binomial")$linear.predictors
+  p_y_hat <- glm(vars$y~vars$X,family = "binomial")$fitted.values
   # Compute J predictions from subsample estimator:
   run_J_predictions = function() {
     output <- rbindlist(
@@ -10,13 +10,13 @@ sim_undersampling <- function(vars, subsample_estimator, J=1000, ...) {
           estimate <- tryCatch(
             subsample_estimator(vars, ...), # subsample estimate
             error = function(e) {
-              return(list(linear_predictors=NA))
+              return(list(fitted=NA))
             }
           )
           data.table(
-            y_hat  = c(y_hat),
-            y_hat_subsample = estimate$linear_predictors,
-            i = 1:length(y_hat),
+            p_y_hat  = c(p_y_hat),
+            p_y_hat_subsample = estimate$fitted,
+            i = 1:length(p_y_hat),
             j = j
           )
         }
@@ -24,10 +24,10 @@ sim_undersampling <- function(vars, subsample_estimator, J=1000, ...) {
     )
     # Compute variance, bias and MSE:
     output=na.omit(output) # for cases where estimation yielded NaNs (can happen when m->p)
-    output[,avg_y_hat_subsample := mean(y_hat_subsample), by=.(i)]
-    V <- output[,.(V_b=(1/n)*norm(as.matrix(y_hat_subsample - avg_y_hat_subsample), type="f")^2),by=.(j)][,mean(V_b)]
-    bias_sq <- output[,.(avg_bias_i = mean(y_hat - y_hat_subsample)), by=.(i)][,(1/n)*norm(as.matrix(avg_bias_i, type="f")^2)]
-    mse_check <- output[,.(mse_b=(1/n)*norm(as.matrix(y_hat - y_hat_subsample), type="f")^2),by=.(j)][,mean(mse_b)]
+    output[,avg_y_hat_subsample := mean(p_y_hat_subsample), by=.(i)]
+    V <- output[,.(V_b=(1/n)*norm(as.matrix(p_y_hat_subsample - avg_y_hat_subsample), type="f")^2),by=.(j)][,mean(V_b)]
+    bias_sq <- output[,.(avg_bias_i = mean(p_y_hat - p_y_hat_subsample)), by=.(i)][,(1/n)*norm(as.matrix(avg_bias_i, type="f")^2)]
+    mse_check <- output[,.(mse_b=(1/n)*norm(as.matrix(p_y_hat - p_y_hat_subsample), type="f")^2),by=.(j)][,mean(mse_b)]
     mse <- V + bias_sq 
     if (abs(mse_check-mse)>1e-5) {
       warning(

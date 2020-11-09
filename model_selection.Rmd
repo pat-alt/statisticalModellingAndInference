@@ -688,15 +688,39 @@ In R this can be implemented as below. The function also implements weighted log
 ```{r, code=readLines("R/logit_irls.R")}
 ```
 
-Logistic regression offers an ideal testing ground for the subsampling methods introduced earlier: while we would not generally use the MSE to compare predicted probabilities as in \@ref(eq:log-reg), we *can* use it to compare the linear predictions in \@ref(eq:lin-pred) in the same way as we did earlier. This has the advantage that bias-variance decomposition works in the exact same way as before. As a first step we will therefore repeat the numerical exercise from above, but now applied to linear predictions for our binary outcome variable $y$.
+
+When thinking about repeating the numerical exercise from Section \@ref(lin-reg) above, we are faced with the question of how to compute the MSE and its bias-variance decomposition. One idea could be to compare the linear predictions in \@ref(eq:lin-pred) in the same way as we did before, since after all these are fitted values from a linear model. The problem with that idea is that rebalancing the data through undersampling affects the intercept term $\beta_0$ (potentially quite a bit if the data was originally very imbalanced). This is not surprising since $\beta_0$ measures the log odds of $y_i$ given all predictors $\mathbf{X}_i=0$ are zero. Hence comparing linear predictors $\mathbf{X}\beta_n$ and  $\mathbf{X}\beta_m$ is not a good idea in this setting. Fortunately though we can just work with the predicted probabilities in \@ref(eq:log-reg) directly and decompose the MSE in the same way as before (see @manning2008introduction pp. 310): 
+
+$$
+\begin{equation} 
+\begin{aligned}
+&& \mathbb{E} \left( (\hat{p}-p)^2 \right)
+&= \text{var} (\hat{p}) + \left( \mathbb{E} \left( \hat{p} \right) - p \right)^2 \\
+\end{aligned}
+(\#eq:mse-prob)
+\end{equation}
+$$
+Hence the numerical exercise in this section is very similar to the one above and can be summarized as follows:
+
+**Numerical exercise**
+
+1. Generate synthetic data $X$ of dimension $(n \times m)$ with $n>>m$. 
+2. Randomly generate the binary outcome variable as $y |X \sim \text{Bernoulli}(p=m/n)$.
+3. Estimate the full-sample logit estimator $\hat\beta_n$.
+4. Use one of the undersampling methods to estimate recursively $\{\hat\beta^{(b)}_m\}^B_{b=1}$. 
+5. Evaluate average model performance of $\hat\beta_m$ under the mean-squared error criterium: $MSE= \frac{1}{B} \sum_{b=1}^{B} MSE^{(b)}$ where $MSE^{(b)}$ corresponds to the in-sample estimator of the mean-squared error of the $b$-th iteration.
+
+The $b$-th insample MSE, variance and squared bias are estimated as:
+
+...
 
 ### Model selection
 
-The resulting mean-squared error decompositions are shown in Figures \@ref(fig:wls-logit) and \@ref(fig:ols-logit) for weighted and ordinary least-squares. As pointed out above, the MSE and its components correspond to the linear predictions of the model (Equation \@ref(eq:lin-pred)) rather than predicted probabilities. The observed patterns are broadly in line with what we observed in Section \@ref(lin-reg).
+The resulting mean-squared error decompositions are shown in Figures \@ref(fig:wls-logit) and \@ref(fig:ols-logit) for weighted and ordinary least-squares. The observed patterns are broadly in line with what we observed in Section \@ref(lin-reg).
 
 .... 
 
-This is both reassuring and perhaps altogether not entirely surprising: after all we are using same synthetic data as before and still computing linear predictions. Nonetheless it has been a useful exercise: we have now cleared the ground to move on to our final question - does non-uniform undersampling produce better out-of-sample predictions? We shall turn to this in the final section where will treat real data.
+This is both reassuring and we have now cleared the ground to move on to our final question - does non-juvenile undersampling produce better out-of-sample predictions? We shall turn to this in the final section where will treat real data.
 
 ```{r}
 # Simulation parameters:
