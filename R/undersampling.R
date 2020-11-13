@@ -31,7 +31,7 @@ undersampler <- function(X, y) {
 }
 
 # UNIF method: ----
-UNIF.undersampler <- function(vars, weighted=F, rand_state=NULL) {
+UNIF.undersampler <- function(vars, weighted=F, rand_state=NULL, fit_model=T) {
   if (!is.null(rand_state)) {
     set.seed(rand_state)
   }
@@ -40,28 +40,40 @@ UNIF.undersampler <- function(vars, weighted=F, rand_state=NULL) {
   indices <- c(indices_min, indices)
   X_m <- X[indices,]
   y_m <- y[indices]
-  beta_hat <- glm(y_m~X_m,family = "binomial")$coefficients
-  # beta_hat <- logit_irls(X_m, y_m)$coeff
-  if(!all(X[,1]==1)) {
-    X <- cbind(1,X)
-  }
-  y_hat <- c(X %*% beta_hat)
-  p_y <- exp(y_hat)/(1+exp(y_hat))
-  return(
-    list(
-      linear_predictors = y_hat,
-      fitted = p_y,
-      coeff = beta_hat
+  weights <- NULL
+  if (fit_model) {
+    beta_hat <- glm(y_m~X_m,family = "binomial")$coefficients
+    # beta_hat <- logit_irls(X_m, y_m)$coeff
+    if(!all(X[,1]==1)) {
+      X <- cbind(1,X)
+    }
+    y_hat <- c(X %*% beta_hat)
+    p_y <- exp(y_hat)/(1+exp(y_hat))
+    return(
+      list(
+        linear_predictors = y_hat,
+        fitted = p_y,
+        coeff = beta_hat
+      )
     )
-  )
+  } else {
+    return(
+      list(
+        X = X_m,
+        y = y_m,
+        weights = weights
+      )
+    )
+  }
+  
 }
 
-UNIF = function(vars, weighted=F, rand_state=NULL) {
+UNIF = function(vars, weighted=F, rand_state=NULL, fit_model=T) {
   UseMethod("UNIF")
 }
 
 # BLEV method: ----
-BLEV.undersampler <- function(vars, weighted=F, rand_state=NULL) {
+BLEV.undersampler <- function(vars, weighted=F, rand_state=NULL, fit_model=T) {
   if (!is.null(rand_state)) {
     set.seed(rand_state)
   }
@@ -82,34 +94,44 @@ BLEV.undersampler <- function(vars, weighted=F, rand_state=NULL) {
   X_m <- X[indices,]
   y_m <- y[indices]
   weights <- prob[indices]
-  # Fit:
-  if (weighted) {
-    beta_hat <- glm(y_m~X_m,family = "binomial", weights = weights)$coefficients
-  } else {
-    beta_hat <- glm(y_m~X_m,family = "binomial")$coefficients
-  }
-  # Predict:
-  if(!all(X[,1]==1)) {
-    X <- cbind(1,X)
-  }
-  y_hat <- c(X %*% beta_hat)
-  p_y <- exp(y_hat)/(1+exp(y_hat))
-  
-  return(
-    list(
-      linear_predictors = y_hat,
-      fitted = p_y,
-      coeff = beta_hat
+  if (fit_model) {
+    # Fit:
+    if (weighted) {
+      beta_hat <- glm(y_m~X_m,family = "binomial", weights = weights)$coefficients
+    } else {
+      beta_hat <- glm(y_m~X_m,family = "binomial")$coefficients
+    }
+    # Predict:
+    if(!all(X[,1]==1)) {
+      X <- cbind(1,X)
+    }
+    y_hat <- c(X %*% beta_hat)
+    p_y <- exp(y_hat)/(1+exp(y_hat))
+    return(
+      list(
+        linear_predictors = y_hat,
+        fitted = p_y,
+        coeff = beta_hat
+      )
     )
-  )
+  } else {
+    return(
+      list(
+        X = X_m,
+        y = y_m,
+        weights = weights
+      )
+    )
+  }
+  
 }
 
-BLEV = function(vars, weighted=F, rand_state=NULL) {
+BLEV = function(vars, weighted=F, rand_state=NULL, fit_model=T) {
   UseMethod("BLEV")
 }
 
 # OPT method: ----
-OPT.undersampler <- function(vars, weighted=F, rand_state=NULL) {
+OPT.undersampler <- function(vars, weighted=F, rand_state=NULL, fit_model=T) {
   if (!is.null(rand_state)) {
     set.seed(rand_state)
   }
@@ -143,41 +165,48 @@ OPT.undersampler <- function(vars, weighted=F, rand_state=NULL) {
   X_m <- X[indices,]
   y_m <- y[indices]
   weights <- prob[indices]
-  # Fit:
-  if (weighted) {
-    beta_hat <- glm(y_m~X_m,family = "binomial", weights = weights)$coefficients
-  } else {
-    beta_hat <- glm(y_m~X_m,family = "binomial")$coefficients
-  }
-  # Predict:
-  if(!all(X[,1]==1)) {
-    X <- cbind(1,X)
-  }
-  y_hat <- c(X %*% beta_hat)
-  p_y <- exp(y_hat)/(1+exp(y_hat))
-  return(
-    list(
-      linear_predictors = y_hat,
-      fitted = p_y,
-      coeff = beta_hat
+  if (fit_model) {
+    # Fit:
+    if (weighted) {
+      beta_hat <- glm(y_m~X_m,family = "binomial", weights = weights)$coefficients
+    } else {
+      beta_hat <- glm(y_m~X_m,family = "binomial")$coefficients
+    }
+    # Predict:
+    if(!all(X[,1]==1)) {
+      X <- cbind(1,X)
+    }
+    y_hat <- c(X %*% beta_hat)
+    p_y <- exp(y_hat)/(1+exp(y_hat))
+    return(
+      list(
+        linear_predictors = y_hat,
+        fitted = p_y,
+        coeff = beta_hat
+      )
     )
-  )
+  } else {
+    return(
+      list(
+        X = X_m,
+        y = y_m,
+        weights = weights
+      )
+    )
+  }
+  
 }
 
-OPT = function(vars, weighted=F, rand_state=NULL) {
+OPT = function(vars, weighted=F, rand_state=NULL, fit_model=T) {
   UseMethod("OPT")
 }
 
 # PL method: ----
-PL.undersampler <- function(vars, weighted=F, rand_state=NULL) {
+PL.undersampler <- function(vars, weighted=F, rand_state=NULL, fit_model=T) {
   if (!is.null(rand_state)) {
     set.seed(rand_state)
   }
   invisible(list2env(vars, envir = environment()))
-  # Leverage scores:
-  U <- svd(X)$u
-  H <- tcrossprod(U)
-  h <- diag(H)
   # Euclidian norms:
   predictor_len <- sapply(
     1:n,
@@ -198,27 +227,38 @@ PL.undersampler <- function(vars, weighted=F, rand_state=NULL) {
   X_m <- X[indices,]
   y_m <- y[indices]
   weights <- prob[indices]
-  # Fit:
-  if (weighted) {
-    beta_hat <- glm(y_m~X_m,family = "binomial", weights = weights)$coefficients
-  } else {
-    beta_hat <- glm(y_m~X_m,family = "binomial")$coefficients
-  }
-  # Predict:
-  if(!all(X[,1]==1)) {
-    X <- cbind(1,X)
-  }
-  y_hat <- c(X %*% beta_hat)
-  p_y <- exp(y_hat)/(1+exp(y_hat))
-  return(
-    list(
-      linear_predictors = y_hat,
-      fitted = p_y,
-      coeff = beta_hat
+  if (fit_model) {
+    # Fit:
+    if (weighted) {
+      beta_hat <- glm(y_m~X_m,family = "binomial", weights = weights)$coefficients
+    } else {
+      beta_hat <- glm(y_m~X_m,family = "binomial")$coefficients
+    }
+    # Predict:
+    if(!all(X[,1]==1)) {
+      X <- cbind(1,X)
+    }
+    y_hat <- c(X %*% beta_hat)
+    p_y <- exp(y_hat)/(1+exp(y_hat))
+    return(
+      list(
+        linear_predictors = y_hat,
+        fitted = p_y,
+        coeff = beta_hat
+      )
     )
-  )
+  } else {
+    return(
+      list(
+        X = X_m,
+        y = y_m,
+        weights = weights
+      )
+    )
+  }
+  
 }
 
-PL = function(vars, weighted=F, rand_state=NULL) {
+PL = function(vars, weighted=F, rand_state=NULL, fit_model=T) {
   UseMethod("PL")
 }

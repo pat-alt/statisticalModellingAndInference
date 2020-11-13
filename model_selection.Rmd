@@ -98,7 +98,7 @@ $$
 \end{equation}
 $$
 
-where high values of $\lambda$ in \@ref(eq:reg-ls) shrink parameter values towards zero. (Note that a choice $\lambda=0$ corresponds to the OLS estimator.)
+where high values of $\lambda$ in \@ref(eq:reg-ls) shrink parameter values towards zero. (Note that a choice $\lambda=0$ corresponds to the OLS estimator which is defined as long as $p\le n$.)
 As in @bishop2006pattern we proceed as follows for each choice of $\lambda$ and each sample draw:
 
 1. Draw $N=`r n`$ time from $u \sim \text{unif}(`r a`,`r b`)$. 
@@ -430,11 +430,11 @@ for (x in 1:nrow(matrix_grid)) {
   Sigma[i,j] <- 2 * (0.8)^(abs(i-j))
 }
 # 1.) Design matrix (as in Zhu et al): ----
-GA <- matrix(rnorm(n*p), nrow = n, ncol = p) %*% sqrtm(t(Sigma))
+GA <- matrix(rnorm(n*p), nrow = n, ncol = p) %*% sqrt(t(Sigma))
 # Gaussian mixture:
 gaus_mix <- list(
-  gaus_1 = matrix(rnorm(n*p), nrow = n, ncol = p) %*% sqrtm(t(Sigma)),
-  gaus_2 = matrix(rnorm(n*p), nrow = n, ncol = p) %*% sqrtm((25 * t(Sigma)))
+  gaus_1 = matrix(rnorm(n*p), nrow = n, ncol = p) %*% sqrt(t(Sigma)),
+  gaus_2 = matrix(rnorm(n*p), nrow = n, ncol = p) %*% sqrt((25 * t(Sigma)))
 )
 MG <- matrix(rep(0,n*p),n,p)
 for (i in 1:nrow(MG)) {
@@ -444,7 +444,7 @@ for (i in 1:nrow(MG)) {
 # Log-Gaussian:
 LN <- exp(GA)
 # T-distribution:
-T1 <- matrix(rt(n*p,1), nrow = n, ncol = p) %*% sqrtm(t(Sigma))
+T1 <- matrix(rt(n*p,1), nrow = n, ncol = p) %*% sqrt(t(Sigma))
 # Truncated T:
 TT <- T1
 TT[TT>p] <- p
@@ -521,7 +521,7 @@ ggplot(dt_plot, aes(x=x, y=y)) +
   )
 ```
 
-```{r, fig.height=4, fig.width=10, fig.cap="Sampling probabilities for different subsampling methods."}
+```{r, fig.height=3.5, fig.width=10, fig.cap="Sampling probabilities for different subsampling methods."}
 ggplot(
   data = smpl_probs,
   aes(x=data, y=log(prob)) 
@@ -647,7 +647,6 @@ To remain in the subsampling framework we will focus on undersampling here. It s
 ```{r}
 n <- length(data_sets$GA$y)
 prob <- 0.05
-# y <- sample(c(1,0), n, T, prob=c(prob,1-prob))
 ```
 
 In this section we will use the same synthetic data sets as above for our design matrix $X$. But while above we sampled $y_i |x_i\sim \mathcal{N}(\beta^T x_i,\sigma)$, here we will simulate a single draw from $y |X \sim \text{Bernoulli}(p)$, where in order to create imbalance we set $p=`r prob`$ (an overestimate of the true case-fatality rate of COVID if you want). To model the probability of $y=1$ we will use logistic regression:
@@ -671,6 +670,7 @@ $$
 (\#eq:lin-pred)
 \end{equation}
 $$
+
 where $\beta$ can be estimated through iterative re-weighted least-squares (IRLS) which is simple implementation of Newton's method (see for example @wasserman2013all; a complete derivation can also be found in the [appendix](#irls)):
 
 $$
@@ -683,11 +683,11 @@ $$
 (\#eq:irls)
 \end{equation}
 $$
+
 In R this can be implemented as below. The function also implements weighted logistic regression which we will use in the same way we used weighted least-squares above. Alternatively one could of course just use `glm([formula], family="binomial")` to do this in R.
 
 ```{r, code=readLines("R/logit_irls.R")}
 ```
-
 
 When thinking about repeating the numerical exercise from Section \@ref(lin-reg) above, we are faced with the question of how to compute the MSE and its bias-variance decomposition. One idea could be to compare the linear predictions in \@ref(eq:lin-pred) in the same way as we did before, since after all these are fitted values from a linear model. The problem with that idea is that rebalancing the data through undersampling affects the intercept term $\beta_0$ (potentially quite a bit if the data was originally very imbalanced). This is not surprising since $\beta_0$ measures the log odds of $y_i$ given all predictors $\mathbf{X}_i=0$ are zero. Hence comparing linear predictors $\mathbf{X}\beta_n$ and  $\mathbf{X}\beta_m$ is not a good idea in this setting. Fortunately though we can just work with the predicted probabilities in \@ref(eq:log-reg) directly and decompose the MSE in the same way as before (see @manning2008introduction pp. 310): 
 
@@ -700,6 +700,7 @@ $$
 (\#eq:mse-prob)
 \end{equation}
 $$
+
 Hence the numerical exercise in this section is very similar to the one above and can be summarized as follows:
 
 **Numerical exercise**
@@ -716,11 +717,11 @@ The $b$-th insample MSE, variance and squared bias are estimated as:
 
 ### Model selection
 
-The resulting mean-squared error decompositions are shown in Figures \@ref(fig:wls-logit) and \@ref(fig:ols-logit) for weighted and ordinary least-squares. The observed patterns are broadly in line with what we observed in Section \@ref(lin-reg).
+The resulting mean-squared error decompositions are shown in Figures \@ref(fig:wls-logit) and \@ref(fig:ols-logit) for weighted and ordinary logit. The observed patterns are overall not as conclusive as in Section \@ref(lin-reg), but still broadly favour non-uniform subsampling methods. Starting with weighted logit from left to right: for Gaussian data (GA) the differences between the various methods are once again negligible; for mixed Gaussian data non-uniform undersampling does better, in particular basic leveraging (BL); for log-Gaussian data (LN) basic leveraging performs extremely poorly while the other methods produce MSE's of roughly the same magnitude; for truncated, t-distributed data basic leveraging outperforms all other methods; and finally for t-distributed data all non-uniform methods significantly outperform random undersampling. Moving on to ordinary logit the bottom line is that random undersampling either outperforms or does as well as non-uniform methods.
 
-.... 
+It looks like the takeaway from this exercise should be that when using non-uniform subsampling for undersampling in the context of imbalanced data one should use weighted logit. Basic leveraging outperforms other methods in some cases, but bearing in mind the outcome with log-Gaussian data appears altogether too risky. And finally: predictor-length (PL) and optimal (OPT) subsampling with weighted logit consistently outperform random undersampling. The last finding is consistent with the results in Section \@ref(lin-reg) and @zhu2015optimal. 
 
-This is both reassuring and we have now cleared the ground to move on to our final question - does non-juvenile undersampling produce better out-of-sample predictions? We shall turn to this in the final section where will treat real data.
+These findings are overall reassuring and we have now cleared the ground to move on to our final question - does non-juvenile undersampling produce better out-of-sample predictions? 
 
 ```{r}
 # Simulation parameters:
@@ -817,7 +818,7 @@ p_list$Logit
 
 ## Real data example
 
-Until now we have merely shown that non-uniform undersampling leads to better approximations of $\hat\beta_n$ for logistic regression. But ultimately the goal in classification problems is to accurately predict $y$ from test data. The results so far are a promising start: it appears that we have successfully dealt with an important issue associated with *random* undersampling which we already flagged above - loss of important observations. To investigate if this also leads to better out-of-sample predictions we will next turn to some real data.
+Until now we have merely shown that non-uniform undersampling can lead to better approximations of $\hat\beta_n$ for logistic regression. But ultimately the goal in classification problems is to accurately predict $y$ from test data. The results so far offer a promising start: it appears that we have mitigated a common issue associated with *random* undersampling which we already flagged above - loss of important observations. To investigate if this also leads to better out-of-sample predictions we will next turn to real data.
 
 ```{r, eval=F}
 dt <- fread("data/latestdata.csv")
@@ -826,14 +827,14 @@ for(col in names(dt)) {
   set(dt, i=which(dt[[col]]==""), j=col, value=NA)
 }
 dt <- na.omit(dt)
-dt[,id:=.I][,ID:=NULL]
+dt[,patient_id:=.I][,ID:=NULL]
 # Preprocess outcome variable:
 death_states <- unique(dt$outcome)[grepl("die",unique(dt$outcome), ignore.case = T) | 
                      grepl("dea",unique(dt$outcome), ignore.case = T) | 
                      grepl("decea",unique(dt$outcome), ignore.case = T)]
 dt[,y:=ifelse(outcome %in% death_states,1,0)][,outcome:=NULL]
 # Preprocess features:
-dt[,age:=mean(as.numeric(unlist(strsplit(age,"-")))),by=id]
+dt[,age:=mean(as.numeric(unlist(strsplit(age,"-")))),by=patient_id]
 dt[,age:=as.numeric(age)]
 dt[,sex:=ifelse(sex=="female",1,0)]
 saveRDS(dt, "data/dt_preprocessed.rds")
@@ -843,14 +844,8 @@ saveRDS(dt, "data/dt_preprocessed.rds")
 dt <- readRDS("data/dt_preprocessed.rds")
 ```
 
-
-```{r}
-dt <- fread("data/covid_patients.csv")
-n <- dt[,.N]
-state <- unique(dt$state)
-```
-
-Very early on as the pandemic unfolded the Korea Centers for Disease Control & Prevention (KCDC) made anonymised patient data along with a set of complementary data sets available on [Kaggle](https://www.kaggle.com/kimjihoo/coronavirusdataset?select=Case.csv). We will focus solely on the data set containing information about $n=`r n`$ patients. As you can see below the data contains a set of (predominantly discrete) features describing individual subjects as well as a `state` column indicating whether patient has been released from the hospital, isolated in the hospital or if they have passed away. 
+A number of interesting data sets related to COVID-19 have been made publicly available for research. An interesting data set for our purposes that contains information about individual patients is being maintained for the [Open COVID-19 Data Working Group](https://github.com/beoutbreakprepared/nCoV2019). The methodology for building the data set was originally developed by was developed by xu2020Epidemiological. Information about how the data is being maintained and updated can be found in kraemer2020epidemiological. 
+The complete data set is vast, but for our purposes we are only interested in the subset of data that contains information about the patient's outcome state. The subset of the data we will use for our prediction exercise here is shown below. It contains the patient outcome variable $y\in \{0=\text{survived}, 1=\text{deceased}\}$ which we are interested in predicting from a set of features: age, gender and geographical location. The model is kept intentionally simple, as our goal here continues to be the evaluation of subsampling methods, rather than building an accurate prediction. 
 
 ```{r data-head}
 library(DT)
@@ -867,32 +862,37 @@ datatable(
 )
 ```
 
-The `state` column can easily be transformed into a binary outcome variable $y\in\{0=\text{survived},1=\text{deceased}\}$, which is highly imbalanced as expected:
+The outcome variable is defined as $y\in\{0=\text{survived},1=\text{deceased}\}$ and is highly imbalanced as expected: ...
+Note that we are now looking at a significantly higher value for $n$ than in the synthetic examples above. Computing leverage scores in this setting is extremely costly for reasons we have already elaborated on above and hence basic leveraging (BL) and optimal subsampling (OPT) are both omitted from the remainder of the analysis. To compare the two remaining approaches - uniform (UNIF) and prediction-length (PL) subsampling - we will proceed as follows:
 
 ```{r}
-outcome_var <- dt[,.(state)]
-outcome_var[,deceased:=ifelse(state=="deceased",1,0)]
-outcome_var <- outcome_var[,.(proportion=round(.N/nrow(outcome_var),3)),by=.(state,deceased)]
-knitr::kable(outcome_var, col.names = c("State", "y", "Sample proportion"))
-```
-
-In terms of selecting features we will keep things very simple and use only age and sex. Both have a significant share (around 20%) of missing values which will simply omit. As a final simplification we will treat the `age` variable as quasi-numeric 
-
-```{r}
-dt[,y:=ifelse(state=="deceased",1,0)]
-dt_model <-  dt[,.(y,sex,age)]
-for(col in names(dt_model)) {
-  set(dt_model, i=which(dt_model[[col]]==""), j=col, value=NA)
+methods <- list(
+  "UNIF" = UNIF,
+  "PL" = PL
+)
+weighted <- c(T,F)
+cv_splits <-  function(N, n_folds) {
+  index <- 1:N
+  shuffled <- sample(index,N,F)
+  folds <- split(
+    as.numeric(shuffled),
+    f = rep_len(1:n_folds, N )
+  )
+  return(folds)
 }
-dt_model <- na.omit(dt_model)
-dt_model[,age:=as.numeric(gsub("s","",age))]
-X <- dt[,.(sex, age)]
+cv_fold <- 5
+B <- 100
+X_cols <- colnames(dt)[!colnames(dt)%in%c("y","patient_id")]
+X <- as.matrix(dt[,.SD,.SDcols=X_cols])
+y <- dt$y
+folds <- cv_splits(nrow(X), cv_fold)
+pgrid <- data.table(expand.grid(method=names(methods), weighted=weighted))
 ```
 
 To score our probabilistic predictions we will once again use the mean-squared error, although technically in this setting we would speak of the *Brier score* (see [here](https://en.wikipedia.org/wiki/Brier_score):
 
 $$
-\begin{equation} 
+\begin{equation}
 \begin{aligned}
 && BS&= \frac{1}{n} \sum_{i=1}^{n} (y_i-p_i)^2 \\
 \end{aligned}
@@ -900,7 +900,98 @@ $$
 \end{equation}
 $$
 
-Of course other scoring functions are commonly considered for classification problems (for a discussion see for example [here](https://stats.stackexchange.com/questions/172945/rmse-root-mean-squared-error-for-logistic-models)). But using the *Brier score* naturally continues the discussion [above](#subsampling). It also has the benefit 
+Of course other scoring functions are commonly considered for classification problems (for a discussion see for example [here](https://stats.stackexchange.com/questions/172945/rmse-root-mean-squared-error-for-logistic-models)). But using the *Brier score* naturally continues the discussion [above](#subsampling). 
+
+**Empirical exercise**
+
+Cross-validate with $k=`r cv_fold`$ folds and for each fold repeat $B=`r B`$ times:
+
+1. Undersample the training data through one of the methods: $(\mathbf{X}_{\text{train}},y_{\text{train}})$.
+2. Fit the model on the undersampled training data.
+3. Using the fitted model predict $\hat{y}_{\text{train}}$ using the test data $\mathbf{X}_{\text{test}}$.
+4. Compute the Brier score for $y_{\text{test}}$ and $\hat{y}_{\text{train}}$.
+
+```{r, eval=FALSE}
+grid_search <- rbindlist(
+  lapply(
+    1:length(folds),
+    function(k) {
+      # Perform train-test split
+      idx_test <- as.numeric(folds[[k]])
+      idx_train <- as.numeric(unlist(folds[-k]))
+      X_train <- X[idx_train,]
+      y_train <- y[idx_train]
+      X_test <- X[idx_test,]
+      y_test <- y[idx_test]
+      vars <- undersampler(X_train,y_train)
+      output <- rbindlist(
+        lapply( # Loop over grid values:
+          1:nrow(pgrid),
+          function(i) {
+            method_name <- pgrid[i,method]
+            weighted <- pgrid[i,weighted]
+            output <- rbindlist(
+              lapply( # Repeat B times:
+                1:B,
+                function(b) {
+                  Z <- methods[[method_name]](vars, fit_model=F)
+                  X <- Z$X
+                  y <- Z$y
+                  weights <- Z$weights
+                  # Train model:
+                  if (weighted & method_name!="UNIF") {
+                    fitted_model <- glm(y ~ X, family = "binomial",
+                                        weights = weights)
+                  } else {
+                    fitted_model <- glm(y ~ X, family = "binomial")
+                  }
+                  y_hat <- cbind(1,X_test) %*% fitted_model$coefficients 
+                  y_hat <- exp(y_hat)/(1+exp(y_hat))
+                  output <- data.table(
+                    y = y_test,
+                    y_hat = c(y_hat),
+                    fold = k,
+                    weighted = weighted,
+                    b = b,
+                    method = method_name,
+                    n = 1:length(y_test)
+                  )
+                  return(output)
+                }
+              )
+            )
+            return(output)
+          }
+        )
+      )
+      return(output)
+    }
+  )
+)
+grid_search[,brier:=mean((y_hat-y)^2),by=.(method, weighted, b, fold)]
+grid_search[,weighted:=factor(weighted)]
+levels(grid_search$weighted) <- c("Logit","Weighted Logit")
+saveRDS(grid_search, file="outputs/grid_search_covid_adj.rds")
+```
+
+Figure \@ref(fig:brier) shows the distribution of Brier scores resulting from our pseudo-out-of-sample predictions. Undersampling is performed both randomly and with prediction-length subsampling. The logit classifier is fitted separately with and without subsampling probabilities as weights. In the case of weighted logit neither approach to undersampling either out- or under-performs. When the model is fitted without weights though, Brier scores are evdiently much lower when undersampling is performed through predictor-length (PL) subsampling. In other words, our probabilistic predictions are on average more accurate when using systematic, non-uniform undersampling for this imbalanced learning problem. 
+
+```{r brier, fig.height=3, fig.width=6, fig.cap="Distribution of Brier scores from pseudo-out-of-sample predictions for random and prediction-length undersampling."}
+grid_search <- readRDS("outputs/grid_search_covid_adj.rds")
+dt_plot <- unique(grid_search[,.(method, brier, weighted)])
+ggplot(
+  data=dt_plot,
+  aes(x=method, y=brier)
+) +
+  geom_boxplot() +
+  facet_grid(
+    cols = vars(weighted)
+  ) +
+  labs(
+    x="Method",
+    y="Brier score"
+  )
+```
 
 # Appendix {#app}
 
