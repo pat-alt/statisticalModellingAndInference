@@ -141,19 +141,9 @@ OPT.undersampler <- function(vars, weighted=F, rand_state=NULL, fit_model=T) {
   H <- tcrossprod(U)
   h <- diag(H)
   # Euclidian norms:
-  predictor_len <- sapply(
-    1:n,
-    function(i) {
-      norm(as.matrix(X[i,]), type="f")
-    }
-  )
+  predictor_len <- sqrt(X**2 %*% rep(1,ncol(X)))
   # Optimal sampling probabilities:
-  prob <- sapply(
-    1:n, 
-    function(i) {
-      (sqrt(1-h[i]) * predictor_len[i]) / crossprod(sqrt(1-h),predictor_len)[1]
-    }
-  )
+  prob <- (sqrt(1-h) * predictor_len) / crossprod(sqrt(1-h),predictor_len)[1]
   # Sample:
   indices <- sample(
     x = indices_maj, 
@@ -208,14 +198,9 @@ PL.undersampler <- function(vars, weighted=F, rand_state=NULL, fit_model=T) {
   }
   invisible(list2env(vars, envir = environment()))
   # Euclidian norms:
-  predictor_len <- sapply(
-    1:n,
-    function(i) {
-      norm(as.matrix(X[i,]), type="f")
-    }
-  )
+  predictor_len <- sqrt(X**2 %*% rep(1,ncol(X)))
   # Sampling probabilities:
-  prob <- sapply(predictor_len, function(i) i/sum(predictor_len))
+  prob <- predictor_len/sum(predictor_len)
   # Sample:
   indices <- sample(
     x = indices_maj, 

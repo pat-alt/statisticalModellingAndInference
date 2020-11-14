@@ -6,19 +6,9 @@ OPT <- function(Phi, y, m, weighted=F, rand_state=NULL, plot_wgts=F, prob_only=F
   H <- tcrossprod(U)
   h <- diag(H)
   # Euclidian norms:
-  predictor_len <- sapply(
-    1:nrow(Phi),
-    function(i) {
-      norm(as.matrix(Phi[i,]), type="f")
-    }
-  )
+  predictor_len <- sqrt(Phi**2 %*% rep(1,ncol(Phi)))
   # Optimal sampling probabilities:
-  prob <- sapply(
-    1:n, 
-    function(i) {
-      (sqrt(1-h[i]) * predictor_len[i]) / crossprod(sqrt(1-h),predictor_len)[1]
-    }
-  )
+  prob <- (sqrt(1-h) * predictor_len) / crossprod(sqrt(1-h),predictor_len)[1]
   # Plot:
   if (plot_wgts) {
     plot(prob, t="l", ylab="Sampling probability")

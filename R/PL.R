@@ -1,11 +1,6 @@
 PL <- function(Phi, y, m, weighted=F, rand_state=NULL, plot_wgts=F, prob_only=F) {
-  predictor_len <- sapply(
-    1:nrow(Phi),
-    function(i) {
-      norm(as.matrix(Phi[i,]), type="f")
-    }
-  )
-  prob <- sapply(predictor_len, function(i) i/sum(predictor_len))
+  predictor_len <- sqrt(Phi**2 %*% rep(1,ncol(Phi)))
+  prob <- predictor_len/sum(predictor_len)
   # Plot:
   if (plot_wgts) {
     plot(prob, t="l", ylab="Sampling probability")
