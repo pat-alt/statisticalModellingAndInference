@@ -1,9 +1,9 @@
-BLEV <- function(Phi, y, m, weighted=F, rand_state=NULL, plot_wgts=F, prob_only=F) {
-  svd_Phi <- svd(Phi)
-  U <- svd_Phi$u
+BLEV <- function(X, y, m, weighted=F, rand_state=NULL, plot_wgts=F, prob_only=F) {
+  svd_X <- svd(X)
+  U <- svd_X$u
   H <- tcrossprod(U)
   h <- diag(H)
-  prob <- h/ncol(Phi)
+  prob <- h/ncol(X)
   # Plot:
   if (plot_wgts) {
     plot(prob, t="l", ylab="Sampling probability")
@@ -18,15 +18,15 @@ BLEV <- function(Phi, y, m, weighted=F, rand_state=NULL, plot_wgts=F, prob_only=
       replace = T,
       prob = prob
     )
-    Phi_m <- Phi[indices,]
+    X_m <- X[indices,]
     y_m <- y[indices]
-    weights <- prob[indices]
+    weights <- 1/prob[indices]
     if (weighted) {
-      beta_hat <- wls_qr(Phi_m, y_m, weights)
+      beta_hat <- wls_qr(X_m, y_m, weights)
     } else {
-      beta_hat <- qr.solve(Phi_m, y_m)
+      beta_hat <- qr.solve(X_m, y_m)
     }
-    y_hat <- c(Phi %*% beta_hat)
+    y_hat <- c(X %*% beta_hat)
     return(
       list(
         fitted = y_hat,

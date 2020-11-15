@@ -6,8 +6,8 @@ logit_irls <- function(X, y, beta_0=NULL, tau=1e-9, max_iter=10000, weights=NULL
   n <- nrow(X)
   if (!is.null(weights)) {
     Phi <- diag(weights)
-    X <- sqrt(qr.solve(Phi)) %*% X
-    y <- sqrt(qr.solve(Phi)) %*% y
+    X <- sqrtm(Phi) %*% X
+    y <- sqrtm(Phi) %*% y
   }
   # Initialization: ----
   if (is.null(beta_0)) {

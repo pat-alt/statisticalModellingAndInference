@@ -1,5 +1,5 @@
-PL <- function(Phi, y, m, weighted=F, rand_state=NULL, plot_wgts=F, prob_only=F) {
-  predictor_len <- sqrt(Phi**2 %*% rep(1,ncol(Phi)))
+PL <- function(X, y, m, weighted=F, rand_state=NULL, plot_wgts=F, prob_only=F) {
+  predictor_len <- sqrt(X**2 %*% rep(1,ncol(X)))
   prob <- predictor_len/sum(predictor_len)
   # Plot:
   if (plot_wgts) {
@@ -15,15 +15,15 @@ PL <- function(Phi, y, m, weighted=F, rand_state=NULL, plot_wgts=F, prob_only=F)
       replace = T,
       prob = prob
     )
-    Phi_m <- Phi[indices,]
+    X_m <- X[indices,]
     y_m <- y[indices]
-    weights <- prob[indices]
+    weights <- 1/prob[indices]
     if (weighted) {
-      beta_hat <- wls_qr(Phi_m, y_m, weights)
+      beta_hat <- wls_qr(X_m, y_m, weights)
     } else {
-      beta_hat <- qr.solve(Phi_m, y_m)
+      beta_hat <- qr.solve(X_m, y_m)
     }
-    y_hat <- c(Phi %*% beta_hat)
+    y_hat <- c(X %*% beta_hat)
     return(
       list(
         fitted = y_hat,
