@@ -858,8 +858,6 @@ In R this can be implemented from scratch as below. The function also implements
 ```{r class.source = "fold-show", code=readLines("R/logit_irls.R")}
 ```
 
-### Aproximating $\hat\beta_n$
-
 When thinking about repeating the empirical exercise from Section \@ref(lin-reg) above, we are faced with the question of how to compute the MSE and its bias-variance decomposition. One idea could be to compare the linear predictions in \@ref(eq:lin-pred) in the same way as we did before, since after all these are fitted values from a linear model. The problem with that idea is that rebalancing the data through undersampling affects the intercept term $\beta_0$ (potentially quite a bit if the data was originally very imbalanced). This is not surprising since $\beta_0$ measures the log odds of $y_i$ given all predictors $\mathbf{X}_i=0$ are zero. Hence comparing linear predictors $\mathbf{X}\beta_n$ and  $\mathbf{X}\beta_m$ is not a good idea in this setting (perhaps ever?). Fortunately though we can just work with the predicted probabilities in \@ref(eq:log-reg) directly and decompose the MSE in the same way as before (see @manning2008introduction, pp. 310): 
 
 $$
@@ -886,6 +884,8 @@ There is a decisive difference between this exercise and the one we ran for line
 
 The resulting mean-squared error decompositions are shown in Figures \@ref(fig:wls-logit) and \@ref(fig:ols-logit) for weighted and ordinary logit. A first interesting and reassuring observation is that both for weighted and ordinary logit the variance component is generally reduced more with *mVc* subsampling (certainly less true for weighted logit). A second observation is that the squared bias term can evidently not be controlled with *mVc* which leads to the overall mean-squared errors generally being higher than with random undersampling. This could be evidence that selective subsampling in fact introduces bias as speculated above, but this is not clear and would have to be explored more thoroughly. 
 
+*It could also very well be that the algorithm in @wang2018optimal was not implemented correctly here and the results are therefore incorrect. Unfortunately I have not had time to try and completely replicate that second paper also.*
+
 ```{r}
 # Simulation parameters:
 data_sets <- tryCatch(
@@ -897,6 +897,10 @@ data_sets <- tryCatch(
 n <- 1000
 m <- 2^(3:7)*1e-3
 weighted <- c(T,F)
+methods <- list(
+  "UNIF" = UNIF,
+  "mVc" = mVc
+)
 pgrid <- data.table(
   expand.grid(
     m=m, 
@@ -904,10 +908,6 @@ pgrid <- data.table(
     weighted=weighted, 
     data_set=names(data_sets)
   )
-)
-methods <- list(
-  "UNIF" = UNIF,
-  "mVc" = mVc
 )
 ```
 
@@ -979,136 +979,9 @@ gg <- ggplotly(p_list$Logit)
 layout_ggplotly(gg, y=-0.05)
 ```
 
-### Predicting out-of-sample
-
-We will now turn to out-of-sample predictions
-
-```{r}
-set.seed(1)
-m <- c(0.05,0.1,0.25)
-pgrid <- data.table(
-  expand.grid(
-    m = m,
-    method=names(methods), 
-    weighted=weighted, 
-    data_set=names(data_sets)
-  )
-)
-cv_splits <-  function(N, n_folds) {
-  index <- 1:N
-  shuffled <- sample(index,N,F)
-  folds <- split(
-    as.numeric(shuffled),
-    f = rep_len(1:n_folds, N )
-  )
-  return(folds)
-}
-cv_fold <- 5
-# Train-test split
-folds <- cv_splits(nrow(data_sets$GA$X), cv_fold)
-B <- 100
-beta <- c(-1,0.2,0.2,0.2)
-```
-
-```{r logit-oos, eval=F}
-set.seed(1)
-grid_search <- rbindlist(
-  lapply(
-    1:length(folds),
-    function(k) {
-      # Perform train-test split
-      idx_test <- as.numeric(folds[[k]])
-      idx_train <- as.numeric(unlist(folds[-k]))
-      output <- rbindlist(
-        lapply( # Loop over grid values:
-          1:nrow(pgrid),
-          function(i) {
-            m <- pgrid[i,m]
-            method_name <- pgrid[i,method]
-            weighted <- pgrid[i,weighted]
-            data_name <- pgrid[i,data_set]
-            X <- data_sets[[data_name]]$X
-            lin_pred <- cbind(1,X) %*% beta + rnorm(n=n,mean=0,sd=10)
-            y <- round(exp(lin_pred)/(1+exp(lin_pred)))
-            X_train <- X[idx_train,]
-            y_train <- y[idx_train]
-            X_test <- X[idx_test,]
-            y_test <- y[idx_test]
-            vars <- undersampler(X_train,y_train)
-            output <- rbindlist(
-              lapply( # Repeat B times:
-                1:B,
-                function(b) {
-                  y_hat <- tryCatch(
-                    {
-                      Z <- methods[[method_name]](vars, fit_model=F)
-                      X <- Z$X
-                      y <- Z$y
-                      weights <- Z$weights
-                      # Train model:
-                      if (weighted & method_name!="UNIF") {
-                        fitted_model <- glm(y ~ X, family = "binomial",
-                                            weights = weights)
-                      } else {
-                        fitted_model <- glm(y ~ X, family = "binomial")
-                      }
-                      y_hat <- cbind(1,X_test) %*% fitted_model$coefficients 
-                      exp(y_hat)/(1+exp(y_hat))
-                    },
-                    error = function(e) {
-                      return(NA)
-                    }
-                  )
-                  output <- data.table(
-                    y = y_test,
-                    y_hat = c(y_hat),
-                    fold = k,
-                    weighted = weighted,
-                    b = b,
-                    method = method_name,
-                    n = 1:length(y_test),
-                    data_set = data_name
-                  )
-                  return(output)
-                }
-              )
-            )
-            return(output)
-          }
-        )
-      )
-      return(output)
-    }
-  )
-)
-grid_search[,weighted:=factor(weighted)]
-levels(grid_search$weighted) <- c("Logit","Weighted Logit")
-grid_search[,brier:=mean((y_hat-y)^2,na.rm=T),by=.(method, weighted, b, fold, data_set)]
-saveRDS(grid_search, file="outputs/grid_search_logit_oos.rds")
-```
-
-
-```{r}
-grid_search <- readRDS("outputs/grid_search_logit_oos.rds")
-dt_plot <- unique(grid_search[,.(method, brier, weighted, data_set)])
-ggplot(
-  data=dt_plot,
-  aes(x=method, y=brier)
-) +
-  geom_boxplot() +
-  facet_grid(
-    cols = vars(data_set),
-    rows = vars(weighted)
-  ) +
-  labs(
-    x="Method",
-    y="Brier score"
-  )
-```
-
 ## Real data example
 
-Until now we have merely shown that non-uniform undersampling can lead to better approximations of $\hat\beta_n$ for logistic regression. But ultimately the goal in classification problems is to accurately predict $\mathbf{y}$ from test data. The results so far offer a promising start: it appears that we have mitigated a common issue associated with *random* undersampling which we already flagged above - loss of important observations. To investigate if this also leads to better out-of-sample predictions we will next turn to real data.
+Until now we have merely looked at approximations of $\hat\beta_n$ for logistic regression with imbalanced data. But ultimately the goal in classification problems is to accurately predict $\mathbf{y}$ from test data. To investigate this point we will next turn to real data.
 
 ```{r, eval=F}
 dt <- fread("data/latestdata.csv")
@@ -1199,7 +1072,7 @@ Cross-validate with $k=`r cv_fold`$ folds and for each fold repeat $B=`r B`$ tim
 3. Using the fitted model predict $\hat{\mathbf{y}}_{\text{train}}$ using the test data $\mathbf{X}_{\text{test}}$.
 4. Compute the Brier score for $\mathbf{y}_{\text{test}}$ and $\hat{\mathbf{y}}_{\text{train}}$.
 
-```{r, eval=T}
+```{r, eval=F}
 grid_search <- rbindlist(
   lapply(
     1:length(folds),
@@ -1262,10 +1135,7 @@ levels(grid_search$weighted) <- c("Logit","Weighted Logit")
 saveRDS(grid_search, file="outputs/grid_search_covid_adj.rds")
 ```
 
-Figure \@ref(fig:brier) shows the distribution of Brier scores resulting from our pseudo-out-of-sample predictions. Undersampling is performed both randomly and with prediction-length subsampling. The logit classifier is fitted separately with and without subsampling probabilities as weights. In the case of weighted logit neither approach to undersampling either out- or under-performs. When the model is fitted without weights though, Brier scores are evidently much lower when undersampling is performed through predictor-length (PL) subsampling. In other words, our probabilistic predictions are on average more accurate when using systematic, non-uniform undersampling for this imbalanced learning problem. 
-
-The finding that PL subsampling produces better out-of-sample predictions under ordinary logit is somewhat puzzling, since in the previous [section](class-syn) on synthetic data we found that non-uniform undersampling outperform random undersampling only with weighted logit. 
-Of course in this section we have looked at a real data set and - more importantly - we have compared the undersampling methods in terms of their out-of-sample predictions, while previously we looked at in-sample predictions. So this particular finding is a little surprising. Nonetheless, we have shown that recently developed subsampling methods can indeed be readily applied to imbalanced learning and in fact lead to better model predictions.
+Figure \@ref(fig:brier) shows the distribution of Brier scores resulting from our pseudo-out-of-sample predictions. Undersampling is performed both randomly and with *mVc* subsampling. The logit classifier is fitted separately with and without subsampling probabilities as weights. In the case of ordinary logit *mVc* seems to lead to slightly better predictions on average, but the improvement is not very significant. When the model is fitted with weights something interesting happens. The majority of the estimated Brier scores are lower than those obtained with random undersampling, but there is much higher variance and in some cases *mVc* performs very poorly. This could imply that using optimal subsampling for undersampling with weighted regression is risky: it performs well most of the time, but sometimes things go very wrong. Of course, this is a just a single example and the findings shown here are not sufficient to draw any conclusions.
 
 ```{r brier, fig.height=3, fig.width=6, fig.cap="Distribution of Brier scores from pseudo-out-of-sample predictions for random and prediction-length undersampling."}
 grid_search <- readRDS("outputs/grid_search_covid_adj.rds")
@@ -1275,8 +1145,9 @@ ggplot(
   aes(x=method, y=brier)
 ) +
   geom_boxplot() +
-  facet_grid(
-    cols = vars(weighted)
+  facet_wrap(
+    ~ weighted,
+    scales="free"
   ) +
   labs(
     x="Method",
@@ -1286,9 +1157,7 @@ ggplot(
 
 # Conclusion {#concl}
 
-In this short note we have looked at various systematic subsampling methods and how they can be applied to imbalanced learning. The fact that non-uniform subsampling can improve performance of linear regression models has been well established (@zhu2015optimal). We reviewed these findings here and then applied the developed idea to a binary classification problem with imbalanced data. The findings presented here suggest that non-uniform subsampling can be applied to classification in much the same way as to linear regression and that it generally leads to similar improvements in model performance. We finally saw that when applied to a read data set, prediction-length undersampling produced better out-of-sample predictions than random undersampling with ordinary logit. 
-
-While these findings are very interesting they are not conclusive. To establish general results theory would need to be developed. It is also far from clear whether the undersampling approaches presented here can compete with existing methodologies that involve distance-criteria, condensed nearest neighbours and active learning methods.
+In this short note we have looked at various systematic subsampling methods and how they can be applied to imbalanced learning. The fact that non-uniform subsampling can improve performance of linear regression models has been well established (@zhu2015optimal). We reviewed these findings here and then applied the developed idea to a binary classification problem with imbalanced data. The findings are mixed: it does appear that optimal subsampling methods can be successfully applied to undersampling in the sense that they can improve modely accuracy. While these findings are potentially interesting they are not conclusive. To establish general results theory would need to be developed. It is also far from clear whether the undersampling approaches presented here can compete with existing methodologies that involve distance-criteria, condensed nearest neighbours and active learning methods. 
 
 # Appendix {-}
 
