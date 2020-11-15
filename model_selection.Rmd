@@ -1,5 +1,5 @@
 ---
-title: "Non-juvenile undersampling"
+title: "Optimal subsampling applied to imbalanced learning"
 subtitle: "Model selection"
 author: "Patrick Altmeyer"
 date: "`r format(Sys.Date(), '%d %B, %Y')`"
@@ -792,7 +792,7 @@ A common and straight-forward way to deal with this issue is to randomly over- o
   
 In a way both these methods correspond to uniform subsampling (UNIF) discussed above. Random oversampling may lead to overfitting. Conversely, random undersampling may come at the cost of eliminating observations with valuable information. With respect to the latter, we have already shown that more systematic subsampling approaches generally outperform uniform subsampling in linear regression problems. It would be interesting to see if we can apply similar ideas to classification with imbalanced data. How exactly we can go about doing this should be straight-forward to see:
 
-3. *Non-juvenile undersampling*: draw $n_{y=1}$ times from from majority class $\mathbf{y}_{n_{y=0}}$ with probability $\{\pi_i\}^{n_{y=0}}_{i=0}$ defined by optimal subsampling methods and throw out the remainder.
+3. *Systematic undersampling*: draw $n_{y=1}$ times from from majority class $\mathbf{y}_{n_{y=0}}$ with probability $\{\pi_i\}^{n_{y=0}}_{i=0}$ defined by optimal subsampling methods and throw out the remainder.
 
 To remain in the subsampling framework we will focus on undersampling here. It should be noted that many systematic approaches to undersampling already exist. In their extensive survey @branco2015survey mention undersampling methods based on distance-criteria, condensed nearest neighbours as well as active learning methods. Optimal subsampling is not mentioned in the survey.
 
@@ -809,7 +809,7 @@ $$
 \end{equation}
 $$
 
-The probabilities are then used to subsample $m$ observations again. Finally, $\hat\beta_{m_0+m}$ is estimated from the combdined subsamples with weighted logistic regression where weights once again correspond to inverse sampling probabilities. The authors refer to the method corresponding to \@ref{eq:subs_mVc} as *mVc* since it corresponds to optimal subsampling with variance targeting. They also propose a method which targets the MSE directly, but this one is of higher computational costs $\mathcal{O}(np^2)$ vs. $\mathcal{O}(np)$ for *mVc*. The similarities to the case for linear regression should be obvious. We will only consider *mVc* here and see if it can be applied to undersampling. The code that implements this can be found [here](R/undersampling.R). @wang2018optimal never run the model with ordinary as opposed to weighted logit, possibly because ordinary logit is not sensible in this context. But for the sake of completeness we'll once again consider both cases here.
+The probabilities are then used to subsample $m$ observations again. Finally, $\hat\beta_{m_0+m}$ is estimated from the combdined subsamples with weighted logistic regression where weights once again correspond to inverse sampling probabilities. The authors refer to the method corresponding to \@ref{eq:subs_mVc} as *mVc* since it corresponds to optimal subsampling with variance targeting. They also propose a method which targets the MSE directly, but this one is of higher computational costs $\mathcal{O}(np^2)$ vs. $\mathcal{O}(np)$ for *mVc*. The similarities to the case for linear regression should be obvious. We will only consider *mVc* here and see if it can be applied to undersampling. The code that implements this can be found [here](R/undersampling.R) - it uses object-oriented program so could be interesting for some readers. @wang2018optimal never run the model with ordinary as opposed to weighted logit, possibly because ordinary logit is not sensible in this context. But for the sake of completeness we'll once again consider both cases here.
 
 ## Synthetic data {#class-syn}
 
