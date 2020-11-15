@@ -853,7 +853,7 @@ $$
 \end{equation}
 $$
 
-In R this can be implemented from scratch as below. The function also implements weighted logistic regression which we will use in the same way we used weighted least-squares above. For the empirical exercises we will rely on `glm([formula], family="binomial")`.
+In R this can be implemented from scratch as below. For the empirical exercises we will rely on `glm([formula], family="binomial")` which scales much better to higher dimensional problems than my custom function and also implements weighted logit.
 
 ```{r class.source = "fold-show", code=readLines("R/logit_irls.R")}
 ```

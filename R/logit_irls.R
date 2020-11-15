@@ -1,17 +1,12 @@
-logit_irls <- function(X, y, beta_0=NULL, tau=1e-9, max_iter=10000, weights=NULL) {
+logit_irls <- function(X, y, beta_0=NULL, tau=1e-9, max_iter=10000) {
   if(!all(X[,1]==1)) {
     X <- cbind(1,X)
   }
   p <- ncol(X)
   n <- nrow(X)
-  if (!is.null(weights)) {
-    Phi <- diag(weights)
-    X <- sqrtm(Phi) %*% X
-    y <- sqrtm(Phi) %*% y
-  }
   # Initialization: ----
   if (is.null(beta_0)) {
-    beta_latest <- matrix(rep(1, p)) # naive first guess
+    beta_latest <- matrix(rep(0, p)) # naive first guess
   }
   W <- diag(n)
   can_still_improve <- T
